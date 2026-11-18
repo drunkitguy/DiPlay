@@ -878,6 +878,8 @@ class AirPlaySession(
             // Avoid Nagle coalescing on this interactive event connection: small HID/event writes
             // need not wait for earlier unacknowledged data.
             socket.tcpNoDelay = true
+            // DSCP EF: the hotspot's Wi-Fi queues touch reports as voice, ahead of bulk traffic.
+            runCatching { socket.trafficClass = 0xB8 }
             debugLog("airplay event connection accepted from ${socket.remoteSocketAddress} noDelay=${socket.tcpNoDelay}")
             eventSocket = socket
             val shared = pairVerify.shared

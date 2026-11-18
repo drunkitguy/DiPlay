@@ -72,6 +72,7 @@ class ScreenStream(
     }
 
     private fun run(sock: Socket) {
+        runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY) }
         var failure: Throwable? = null
         val stats = StreamReceiveStats("video", onDiagnostic)
         try {

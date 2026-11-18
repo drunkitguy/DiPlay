@@ -689,7 +689,7 @@ object AirPlayPersistence {
 
     fun loadFps(context: Context): Int = AirPlayDisplaySettings.sanitizeFps(
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_FPS, 30),
+            .getInt(KEY_FPS, 60),
     )
 
     /** Music buffer for the session's transport. Wireless and wired USB have separate settings. */
@@ -753,7 +753,7 @@ object AirPlayPersistence {
     }
 
     fun loadDirectVideoOutput(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_DIRECT_VIDEO_OUTPUT, false)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_DIRECT_VIDEO_OUTPUT, true)
 
     fun saveDirectVideoOutput(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_DIRECT_VIDEO_OUTPUT, enabled).apply()

@@ -217,7 +217,12 @@ class CarPlayController(
         )
     }
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val touchExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val touchExecutor: ExecutorService = Executors.newSingleThreadExecutor { task ->
+        Thread({
+            runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY) }
+            task.run()
+        }, "carplay-touch")
+    }
     private val tunnelExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val hostId = UUID.randomUUID().toString().uppercase(Locale.US)

@@ -719,6 +719,8 @@ class AndroidMediaSink(
         // Keep the experimental MTK mode on the main CarPlay picture only. Mirrors and the
         // cluster have separate timing and must retain their established decoder configuration.
         mtkDecoderTuningEnabled = mtkDecoderTuningEnabled && type == MAIN_SCREEN_TYPE && statsLabel == null,
+        hintContext = if (type == MAIN_SCREEN_TYPE && statsLabel == null) appContext else null,
+        frameNanos = 1_000_000_000L / mainVideoFrameRate.coerceIn(30, 60),
     ).also { if (startImmediately) it.start() }
 
     @Synchronized
@@ -919,8 +921,13 @@ private class VideoDecoder(
      */
     private val framesAtOnce: Boolean = false,
     private val mtkDecoderTuningEnabled: Boolean = false,
+    private val hintContext: android.content.Context? = null,
+    private val frameNanos: Long = 16_666_667L,
 ) : Closeable {
     private val pacer = FramePacer()
+    @Volatile private var workerTid = 0
+    @Volatile private var outputTid = 0
+    private var hint: FrameWorkHint? = null
     private val pacingDelay = if (pacingDelayNanos > 0) PacingDelay(pacingDelayNanos) else null
     // Per queued presentation time (decode thread only): when it was queued, and whether it is a paced
     // frame's local time rather than the queue time.
@@ -1055,6 +1062,8 @@ private class VideoDecoder(
     }
 
     private fun run() {
+        workerTid = runCatching { android.os.Process.myTid() }.getOrDefault(0)
+        runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY) }
         try {
             while (running) {
                 val job = queue.poll(5)
@@ -1100,6 +1109,7 @@ private class VideoDecoder(
         } finally {
             running = false
             releaseDecoder()
+            synchronized(outputLock) { hint?.close(); hint = null }
             outputThread?.let { output ->
                 output.interrupt()
                 joinUninterruptibly(output, OUTPUT_EXIT_WAIT_MS)
@@ -1134,6 +1144,7 @@ private class VideoDecoder(
 
     /** The output thread: waits on the current codec's output and releases each frame as it comes. */
     private fun runOutput() {
+        outputTid = runCatching { android.os.Process.myTid() }.getOrDefault(0)
         runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY) }
         val info = MediaCodec.BufferInfo()
         while (running) {
@@ -1603,6 +1614,10 @@ private class VideoDecoder(
                     stats.onDecodeLatency(now - queued)
                     liveDecodeNanos.addAndGet(now - queued)
                     liveDecodeSamples.incrementAndGet()
+                    if (hintContext != null && running) {
+                        val session = hint ?: FrameWorkHint(hintContext, intArrayOf(workerTid, outputTid), frameNanos).also { hint = it }
+                        session.report(now - queued)
+                    }
                 }
                 val delay = pacingDelay
                 val paced = shown && delay != null && slot >= 0 && queuedPaced[slot]
