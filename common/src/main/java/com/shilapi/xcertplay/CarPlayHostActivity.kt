@@ -955,6 +955,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         model = AirPlayPersistence.loadModel(this)
         oemLabel = AirPlayPersistence.loadOemLabel(this)
         fps = AirPlayPersistence.loadFps(this)
+        matchRefreshRate()
         widthPhysicalMm = AirPlayPersistence.loadWidthPhysicalMm(this)
         physicalSizeBasis = AirPlayPersistence.loadPhysicalSizeBasis(this)
         AirPlayPersistence.loadMaximumDetectedDisplay(this).let { (width, height) ->
@@ -3131,6 +3132,7 @@ open class CarPlayHostActivity : ComponentActivity() {
                 label = { "$it fps" },
                 onValueChanged = { value ->
                     fps = value
+                    matchRefreshRate()
                     updateResolutionMenu()
                 },
             ),
@@ -6042,6 +6044,10 @@ open class CarPlayHostActivity : ComponentActivity() {
         startCarPlay(size)
     }
 
+    private fun onExternalPower(): Boolean =
+        registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            ?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+
     private fun reconnectAfterLoss(
         reason: String,
         startupFailure: WirelessStartupFailure? = null,
@@ -6055,7 +6061,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         if (shuttingDown.get() || menuOpen || handshakeResetInProgress || startupRetryStopped) return
         if (reconnectScheduled) return
         val startupDelay = if (startupFailure != null && startupFailure.retryable)
-            startupRetryBudget.nextDelayMillis() else null
+            startupRetryBudget.nextDelayMillis(onExternalPower()) else null
         if (startupFailure != null && startupDelay == null) {
             startupRetryStopped = true
             startupRetryButton?.visibility = View.VISIBLE
@@ -6519,6 +6525,11 @@ open class CarPlayHostActivity : ComponentActivity() {
         }
     }
 
+    // A 60 fps stream on a 90 Hz panel shows frames for 1 then 2 refreshes; ask for a mode matching the stream.
+    private fun matchRefreshRate() {
+        window.attributes = window.attributes.apply { preferredRefreshRate = fps.toFloat() }
+    }
+
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
         if (menuOpen) return true
 
@@ -6526,6 +6537,8 @@ open class CarPlayHostActivity : ComponentActivity() {
             MotionEvent.ACTION_DOWN -> {
                 gestureSequenceActive = false
                 gestureTracking = false
+                // Moves reach CarPlay as they arrive instead of batched to the next frame.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) view.requestUnbufferedDispatch(event)
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 if (gestureFingerCount > 0 && event.pointerCount == gestureFingerCount && !gestureSequenceActive) {

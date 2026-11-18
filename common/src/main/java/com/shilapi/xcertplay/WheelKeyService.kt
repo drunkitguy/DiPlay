@@ -3,7 +3,10 @@ package com.shilapi.xcertplay
 import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
 import android.content.Context
+import android.content.BroadcastReceiver
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
@@ -103,7 +106,24 @@ class WheelKeyService : AccessibilityService() {
         }
     }
 
+    // Car tablet: ignition on powers the USB port, so charging starting means the car just woke.
+    private val powerConnected = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = PhoneBluetoothReceiver.wake(context)
+    }
+    private var powerReceiverRegistered = false
+
+    private fun unregisterPowerReceiver() {
+        if (powerReceiverRegistered) runCatching { unregisterReceiver(powerConnected) }
+        powerReceiverRegistered = false
+    }
+
     override fun onServiceConnected() {
+        // POWER_CONNECTED can't be declared in the manifest on API 26+, and this always-on service may launch activities.
+        unregisterPowerReceiver()
+        val power = IntentFilter(Intent.ACTION_POWER_CONNECTED)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(powerConnected, power, Context.RECEIVER_NOT_EXPORTED)
+        else registerReceiver(powerConnected, power)
+        powerReceiverRegistered = true
         lastObservedDoubleSiriEvent = null
         running = this
         NavigationWheelSettings.recordAuthorization(this)
@@ -130,6 +150,7 @@ class WheelKeyService : AccessibilityService() {
         handler.removeCallbacks(pollEligibility)
         handler.removeCallbacks(endTimedMode)
         clearDoubleSiri()
+        unregisterPowerReceiver()
         return super.onUnbind(intent)
     }
 
@@ -143,6 +164,7 @@ class WheelKeyService : AccessibilityService() {
         keys.timeOut()
         joystick.end()
         clearDoubleSiri()
+        unregisterPowerReceiver()
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }

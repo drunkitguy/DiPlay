@@ -454,9 +454,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private fun consumeBluetoothAutoConnectIntent(intent: Intent): Boolean {
         val requested = intent.getStringExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT) == PhoneBluetoothReceiver.launchToken
         intent.removeExtra(PhoneBluetoothReceiver.EXTRA_AUTO_CONNECT)
-        return requested && DiPlayPreferences.connectOnPhoneBluetooth(this) &&
+        val connect = requested && DiPlayPreferences.connectOnPhoneBluetooth(this) &&
             DiPlayPreferences.phoneAddress(this) != null && setupError == null &&
             !CarPlayBackgroundSession.hasSession()
+        // A tablet left in the car is asleep when the car wakes it; light the screen for CarPlay.
+        if (connect && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setTurnScreenOn(true); setShowWhenLocked(true) }
+        return connect
     }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("page", page)

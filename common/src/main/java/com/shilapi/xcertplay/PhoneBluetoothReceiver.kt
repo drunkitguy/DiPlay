@@ -27,25 +27,7 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
         } ?: return
         val address = runCatching { device.address }.getOrNull() ?: return
         if (!address.equals(selected, ignoreCase = true)) return
-
-        // The car can send several ACL events during one wake-up. Commit before launching so
-        // another receiver instance cannot open a second connection from the same event burst.
-        val prefs = context.getSharedPreferences("diplay_phone_wake", Context.MODE_PRIVATE)
-        val now = SystemClock.elapsedRealtime()
-        val previous = prefs.getLong("last_launch_elapsed", 0)
-        if (prefs.contains("last_launch_elapsed") && now >= previous && now - previous < 15_000) return
-        prefs.edit().putLong("last_launch_elapsed", now).commit()
-        PhoneWakeDiagnostics.record(context, "matched")
-        val launch = Intent(context, DiPlayActivity::class.java).apply {
-            putExtra(EXTRA_AUTO_CONNECT, launchToken)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        }
-        runCatching { context.startActivity(launch) }
-            .onSuccess { PhoneWakeDiagnostics.record(context, "startActivity-returned") }
-            .onFailure { error ->
-                PhoneWakeDiagnostics.record(context, "failed", error)
-                Log.w("DiPlayPhoneWake", "Bluetooth wake launch failed: ${error.javaClass.simpleName}")
-            }
+        wake(context)
     }
 
     companion object {
@@ -53,6 +35,30 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
 
         /** DiPlayActivity is exported. Only this process knows the token, so only its own launch can connect. */
         internal val launchToken: String = java.util.UUID.randomUUID().toString()
+
+        /** Opens DiPlay and starts wireless CarPlay with the selected iPhone; also used when car power comes on. */
+        fun wake(context: Context) {
+            if (!DiPlayPreferences.connectOnPhoneBluetooth(context) || CarPlayBackgroundSession.hasSession() ||
+                DiPlayPreferences.phoneAddress(context) == null) return
+            // The car can send several ACL events during one wake-up. Commit before launching so
+            // another receiver instance cannot open a second connection from the same event burst.
+            val prefs = context.getSharedPreferences("diplay_phone_wake", Context.MODE_PRIVATE)
+            val now = SystemClock.elapsedRealtime()
+            val previous = prefs.getLong("last_launch_elapsed", 0)
+            if (prefs.contains("last_launch_elapsed") && now >= previous && now - previous < 15_000) return
+            prefs.edit().putLong("last_launch_elapsed", now).commit()
+            PhoneWakeDiagnostics.record(context, "matched")
+            val launch = Intent(context, DiPlayActivity::class.java).apply {
+                putExtra(EXTRA_AUTO_CONNECT, launchToken)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        runCatching { context.startActivity(launch) }
+            .onSuccess { PhoneWakeDiagnostics.record(context, "startActivity-returned") }
+            .onFailure { error ->
+                PhoneWakeDiagnostics.record(context, "failed", error)
+                Log.w("DiPlayPhoneWake", "Bluetooth wake launch failed: ${error.javaClass.simpleName}")
+            }
+        }
     }
 }
 

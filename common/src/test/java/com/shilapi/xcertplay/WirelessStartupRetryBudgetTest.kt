@@ -13,6 +13,13 @@ class WirelessStartupRetryBudgetTest {
         assertEquals(2_000L, budget.nextDelayMillis())
     }
 
+    @Test fun keepsRetryingEvery30SecondsOnExternalPower() {
+        val budget = WirelessStartupRetryBudget()
+        repeat(5) { budget.nextDelayMillis() }
+        assertNull(budget.nextDelayMillis())
+        assertEquals(List(100) { 30_000L }, List(100) { budget.nextDelayMillis(onExternalPower = true) })
+    }
+
     @Test fun onlyContinuousVideoSessionResetsBudget() {
         val budget = WirelessStartupRetryBudget()
         budget.nextDelayMillis()
