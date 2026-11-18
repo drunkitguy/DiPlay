@@ -6045,8 +6045,8 @@ open class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun onExternalPower(): Boolean =
-        registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-            ?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+        (registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            ?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
 
     private fun reconnectAfterLoss(
         reason: String,
