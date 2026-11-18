@@ -59,6 +59,8 @@ class SmoothVideoHostLifecycleTest {
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         AirPlayPersistence.saveAdaptPipResolution(activity, false)
         AirPlayPersistence.saveMfiTarget(activity, MfiTarget.USB_CH341)
+        // These tests drive the TextureView host; Direct video output (on by default) waits for a SurfaceView surface.
+        AirPlayPersistence.saveDirectVideoOutput(activity, false)
         // Host startup without vendor-service workers or real transports.
         controllerConstruction = mockConstruction(CarPlayController::class.java) { controller, _ ->
             org.mockito.Mockito.`when`(controller.nowPlayingSnapshot()).thenReturn(CarPlayNowPlaying())

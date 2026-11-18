@@ -50,6 +50,8 @@ class CarPlayHostDisplaySizeTest {
         activity = Robolectric.buildActivity(CarPlayHostActivity::class.java).get()
         AirPlayPersistence.saveAdaptPipResolution(activity, false)
         AirPlayPersistence.saveHarmanFullscreen(activity, false)
+        // These tests drive the TextureView host; Direct video output (on by default) waits for a SurfaceView surface.
+        AirPlayPersistence.saveDirectVideoOutput(activity, false)
         // Source-only tests have no provisioned local authentication identity.
         AirPlayPersistence.saveMfiTarget(activity, MfiTarget.USB_CH341)
         // Exercise host startup without launching vendor-service workers or real transports.

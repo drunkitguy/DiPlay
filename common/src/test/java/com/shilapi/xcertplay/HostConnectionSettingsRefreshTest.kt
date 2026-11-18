@@ -27,6 +27,8 @@ class HostConnectionSettingsRefreshTest {
 
     @Before fun setUp() {
         app.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE).edit().clear().commit()
+        // These tests drive the TextureView host; Direct video output (on by default) waits for a SurfaceView surface.
+        AirPlayPersistence.saveDirectVideoOutput(app, false)
     }
 
     @Test fun projectionScreenUsesConnectionSettingsSavedWhileItWasInTheBackground() {
