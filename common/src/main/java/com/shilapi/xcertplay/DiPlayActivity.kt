@@ -380,6 +380,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             openProjection(); finish(); return
         }
         AirPlayPersistence.preferOwnHotspotOnce(this)
+        skipInsecureLockScreen()
         scheduleBackgroundUpdateChecks()
         availableUpdate = UpdateAvailability.available(this, version())
         enforceInterfaceSize()
