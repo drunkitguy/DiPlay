@@ -3,7 +3,10 @@ package com.shilapi.xcertplay
 import android.app.Activity
 import android.app.KeyguardManager
 import android.os.Build
+import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.PowerManager
+import android.provider.Settings
 
 /**
  * Car tablet: it boots on ignition to the lock screen. With no PIN, pattern or password the lock
@@ -34,4 +37,25 @@ internal fun Activity.wakeScreenForCarPlay(log: (String) -> Unit) {
     log("Screen was off at CarPlay's first picture; waking it")
     power.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "DiPlay:carplay")
         .acquire(3_000)
+}
+
+@Volatile private var wifiOffAsked = false
+
+/**
+ * Car tablet: a Wi-Fi client left on, joined to nothing, keeps scanning and pulls the radio off the
+ * hotspot's channel, which stalls CarPlay for up to a second. Once per boot DiPlay turns it off:
+ * silently where Android allows it (device owner), otherwise by opening the Wi-Fi panel over CarPlay.
+ */
+@Suppress("DEPRECATION") // setWifiEnabled only works for privileged callers on targetSdk 29+.
+internal fun Activity.turnOffWifiClientOnce(log: (String) -> Unit) {
+    val wifi = applicationContext.getSystemService(WifiManager::class.java) ?: return
+    if (wifiOffAsked || !wifi.isWifiEnabled) return
+    wifiOffAsked = true
+    if (runCatching { wifi.setWifiEnabled(false) }.getOrDefault(false)) {
+        log("Wi-Fi client turned off for CarPlay")
+        return
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+    log("Wi-Fi client is on; opening the Wi-Fi panel so the driver can turn it off")
+    runCatching { startActivity(Intent(Settings.Panel.ACTION_WIFI)) }
 }

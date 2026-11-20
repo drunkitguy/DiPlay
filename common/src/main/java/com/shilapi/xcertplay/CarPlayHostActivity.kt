@@ -1208,6 +1208,7 @@ open class CarPlayHostActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         skipInsecureLockScreen(::appendLog)
+        if (wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.LOCAL_ONLY_HOTSPOT) turnOffWifiClientOnce(::appendLog)
         WheelKeyService.restoreIfNeeded(this)
         hostAppearanceResumed = true
         updateCallPopupGuard()
