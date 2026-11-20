@@ -5399,7 +5399,7 @@ open class CarPlayHostActivity : ComponentActivity() {
                     if (controllerGeneration != restartGeneration || activeAirPlaySession !== session || shuttingDown.get()) return@runOnUiThread
                     val firstFrame = startupRetryBudget.firstFrame(session, android.os.SystemClock.elapsedRealtime())
                     if (firstFrame) appendLog("Main video first frame rendered; cluster output may start")
-                    if (firstFrame) { wakeScreenForCarPlay(::appendLog); skipInsecureLockScreen(::appendLog) }
+                    if (firstFrame) { wakeScreenForCarPlay(::appendLog); skipInsecureLockScreen(::appendLog); pinForCarPlay(true, ::appendLog) }
                     ensureClusterPresentation()
                     if (!firstFrame) return@runOnUiThread
                     mainHandler.postDelayed({
@@ -5423,6 +5423,7 @@ open class CarPlayHostActivity : ComponentActivity() {
                     if (controllerGeneration != restartGeneration || startupRetryStopped) return@runOnUiThread
                     startupRetryBudget.disconnected()
                     activeAirPlaySession = null
+                    pinForCarPlay(false, ::appendLog)
                     clusterSurface?.let { sink?.clearSurface(SCREEN_TYPE_ALT, it) }
                     clearIphoneCornerMask()
                     CarPlayBackgroundSession.active = false

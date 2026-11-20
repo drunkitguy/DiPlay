@@ -176,6 +176,19 @@
                 android:resource="@xml/wheel_key_service" />
         </service>
 
+        <!-- Car tablet: device owner by adb (dpm set-device-owner) for silent Wi-Fi off and pinning. -->
+        <receiver
+            android:name="com.shilapi.xcertplay.CarTabletAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/car_tablet_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name="com.shilapi.xcertplay.BootReceiver"
             android:enabled="true"

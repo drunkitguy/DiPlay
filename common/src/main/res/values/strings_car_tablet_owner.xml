@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pin_carplay_title">Pin CarPlay while connected</string>
+    <string name="pin_carplay_description">Recents can\'t switch away from CarPlay. The notification shade still opens.</string>
+    <string name="device_owner_title">Device owner</string>
+    <string name="device_owner_description">DiPlay turns the tablet\'s Wi-Fi off by itself and can pin CarPlay. Turn off to give device owner back.</string>
+    <string name="device_owner_release_message">Give device owner back? DiPlay will stop turning Wi-Fi off by itself and stop pinning CarPlay. Setting it up again needs adb.</string>
+    <string name="device_owner_release">Give back</string>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pin_carplay_title">接続中は CarPlay を固定</string>
+    <string name="pin_carplay_description">履歴から他のアプリに切り替えられなくなります。通知シェードは引き続き開けます。</string>
+    <string name="device_owner_title">デバイスオーナー</string>
+    <string name="device_owner_description">DiPlay がタブレットの Wi-Fi を自動でオフにし、CarPlay を固定できます。オフにするとデバイスオーナーを解除します。</string>
+    <string name="device_owner_release_message">デバイスオーナーを解除しますか？DiPlay は Wi-Fi の自動オフと CarPlay の固定を停止します。再設定には adb が必要です。</string>
+    <string name="device_owner_release">解除</string>
+</resources>

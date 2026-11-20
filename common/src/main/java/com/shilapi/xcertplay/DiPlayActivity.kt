@@ -1829,6 +1829,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 if (it && AirPlayPersistence.loadWirelessHotspotMode(this) != WirelessHotspotMode.MANUAL &&
                     !Settings.canDrawOverlays(this)) openOverlayPermission()
             }
+            if (CarTabletOwner.isOwner(this)) {
+                toggle(card, getString(R.string.pin_carplay_title), getString(R.string.pin_carplay_description),
+                    CarTabletOwner.pinEnabled(this)) { CarTabletOwner.savePinEnabled(this, it) }
+                lateinit var owner: Switch
+                owner = toggle(card, getString(R.string.device_owner_title), getString(R.string.device_owner_description), true) { on ->
+                    if (on) return@toggle
+                    AlertDialog.Builder(this).setMessage(R.string.device_owner_release_message).setCancelable(false)
+                        .setPositiveButton(R.string.device_owner_release) { _, _ -> CarTabletOwner.release(this); recreate() }
+                        .setNegativeButton(android.R.string.cancel) { _, _ -> owner.isChecked = true }
+                        .show()
+                }
+            }
             val autoConfirmActive = UsbPermissionSetup.Permission.ACCESSIBILITY.granted(this)
             toggle(
                 card,
