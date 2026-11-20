@@ -1790,6 +1790,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                     bluetoothAutoConnectPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
                 } else if (enabled && DiPlayPreferences.phoneAddress(this) == null) choosePhone()
+                // Android opens DiPlay from the Bluetooth broadcast only with Display over other apps.
+                else if (enabled && !Settings.canDrawOverlays(this)) openOverlayPermission()
             }
             val connectionModes = DefaultConnectionMode.entries
             choice(card, getString(R.string.default_connection_mode), listOf(
