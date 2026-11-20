@@ -39,6 +39,7 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
     private var startAttempt: StartAttempt? = null
     private var reservation: WifiManager.LocalOnlyHotspotReservation? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private var radioObserver: LocalOnlyHotspotRadioInfo? = null
     private var stopped = false
     private var closed = false
@@ -107,6 +108,7 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
                 acquiredMulticastLock = null
             }
             radioInfo.watch(apInterface.bssid ?: configuration.bssid, onDiagnostic)
+            holdLowLatencyWifi()
 
             // With a live radio reading the channel is measured; Android 11/12 BYD units
             // have neither a live callback nor working WEXT, so there the advertised
@@ -313,8 +315,20 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
         }
 
         releaseMulticastLock(activeMulticastLock)
+        synchronized(stateLock) { wifiLock.also { wifiLock = null } }?.let { runCatching { it.release() } }
         activeObserver?.close()
         activeReservation?.close()
+    }
+
+    /** No Wi-Fi scans or power save while CarPlay streams: scans take airtime from the hotspot and stutter video. */
+    @Suppress("DEPRECATION")
+    private fun holdLowLatencyWifi() {
+        val mode = if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL_LOW_LATENCY else WifiManager.WIFI_MODE_FULL_HIGH_PERF
+        val lock = runCatching {
+            wifiManager.createWifiLock(mode, "DiPlay:carplay").apply { setReferenceCounted(false); acquire() }
+        }.onFailure { onDiagnostic("LocalOnlyHotspot: low-latency Wi-Fi lock unavailable: ${it.javaClass.simpleName}") }
+            .getOrNull() ?: return
+        synchronized(stateLock) { if (closed) null else { wifiLock = lock; lock } } ?: runCatching { lock.release() }
     }
 
     private fun createCallback(attempt: StartAttempt): WifiManager.LocalOnlyHotspotCallback =
