@@ -608,7 +608,13 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
 
     @Suppress("DEPRECATION")
     private fun upstreamInterfaceNames(): Set<String> = connectivityManager?.allNetworks.orEmpty()
+        // Android 15+ lists the local-only hotspot itself as a local network (wlan1 on the Lenovo TB353FU).
+        .filterNot { isLocalNetwork(it) }
         .mapNotNull { connectivityManager?.getLinkProperties(it)?.interfaceName }.toSet()
+
+    private fun isLocalNetwork(network: android.net.Network): Boolean =
+        Build.VERSION.SDK_INT >= 35 && connectivityManager?.getNetworkCapabilities(network)
+            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_LOCAL_NETWORK) == true
 
     private fun NetworkInterface.siteLocalIpv4Addresses(): Set<String> =
         Collections.list(inetAddresses).filterIsInstance<Inet4Address>()
