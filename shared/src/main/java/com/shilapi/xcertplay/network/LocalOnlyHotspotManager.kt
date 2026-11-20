@@ -717,9 +717,12 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
     @RequiresApi(Build.VERSION_CODES.R)
     private fun mapSoftApSecurity(securityType: Int): Iap2WirelessSecurity = when (securityType) {
         SoftApConfiguration.SECURITY_TYPE_OPEN -> Iap2WirelessSecurity.NONE
-        SoftApConfiguration.SECURITY_TYPE_WPA2_PSK -> Iap2WirelessSecurity.WPA_WPA2
-        SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION ->
-            Iap2WirelessSecurity.WPA3_TRANSITION
+        // Android 16 ignores an app's WPA2 request and builds a WPA2/WPA3 transition AP.
+        // A transition AP still takes WPA2-PSK, and CarPlay accessories send value 2 for it;
+        // the iPhone never joined when DiPlay sent 3 (Lenovo TB353FU, 2026-11-20).
+        SoftApConfiguration.SECURITY_TYPE_WPA2_PSK,
+        SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION,
+        -> Iap2WirelessSecurity.WPA_WPA2
         SoftApConfiguration.SECURITY_TYPE_WPA3_SAE -> Iap2WirelessSecurity.WPA3_ONLY
         SoftApConfiguration.SECURITY_TYPE_WPA3_OWE,
         SoftApConfiguration.SECURITY_TYPE_WPA3_OWE_TRANSITION,
@@ -742,7 +745,6 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
         return when {
             owe -> throw IOException("Unsupported LocalOnlyHotspot security type: OWE")
             open && !wpa2 && !sae -> Iap2WirelessSecurity.NONE
-            wpa2 && sae -> Iap2WirelessSecurity.WPA3_TRANSITION
             wpa2 -> Iap2WirelessSecurity.WPA_WPA2
             sae -> Iap2WirelessSecurity.WPA3_ONLY
             else -> throw IOException(
