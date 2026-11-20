@@ -30,6 +30,9 @@ import java.util.concurrent.TimeUnit
  */
 @RequiresApi(Build.VERSION_CODES.O)
 class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (String) -> Unit = {}) : WirelessHotspotManager {
+    // Car tablet: the same SSID and passphrase every boot, so the iPhone rejoins a known network
+    // (Android also derives the AP's randomized BSSID from the SSID, so that stays the same too).
+    private val savedNetwork = context.applicationContext.getSharedPreferences("diplay_hotspot", Context.MODE_PRIVATE)
     private val connectivityManager =
         context.applicationContext.getSystemService(ConnectivityManager::class.java)
     private val wifiManager = context.applicationContext.getSystemService(WifiManager::class.java)
@@ -194,9 +197,10 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             try {
                 val builder = SoftApConfiguration.Builder()
                 SoftApConfiguration.Builder::class.java.getMethod("setSsid", String::class.java)
-                    .invoke(builder, "DiPlay-${UUID.randomUUID().toString().take(6)}")
+                    .invoke(builder, savedNetwork.saved("ssid") { "DiPlay-${UUID.randomUUID().toString().take(6)}" })
                 SoftApConfiguration.Builder::class.java.getMethod("setPassphrase", String::class.java, Int::class.javaPrimitiveType)
-                    .invoke(builder, UUID.randomUUID().toString().replace("-", "").take(20), SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
+                    .invoke(builder, savedNetwork.saved("passphrase") { UUID.randomUUID().toString().replace("-", "").take(20) },
+                        SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
                 // Request the station's 5 GHz channel, or 36 without a 5 GHz station.
                 // BYD may override even a fixed channel (observed 40 -> 149), so credentials
                 // below always use the settled live callback rather than this preference.
@@ -859,3 +863,6 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
         val INTERFACE_POLL_NANOS: Long = TimeUnit.MILLISECONDS.toNanos(100)
     }
 }
+
+private fun android.content.SharedPreferences.saved(key: String, create: () -> String): String =
+    getString(key, null) ?: create().also { edit().putString(key, it).apply() }

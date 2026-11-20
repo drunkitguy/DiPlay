@@ -18,7 +18,12 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.DatagramPacket
+import java.net.MulticastSocket
+import java.net.NetworkInterface
 import java.net.Socket
+import java.net.SocketAddress
+import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -30,6 +35,7 @@ import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
+import javax.jmdns.impl.JmDNSImpl
 
 data class CarPlayBonjourEndpoint(
     val serviceName: String,
@@ -55,6 +61,9 @@ sealed interface CarPlayBonjourEvent {
         enum class Stage { CONNECTING, TCP_CONNECTED, REQUEST_SENT }
     }
     data class ProbeFailed(val stage: ProbeProgress.Stage, val attempt: Int, val error: IOException) : CarPlayBonjourEvent
+
+    /** The phone's first mDNS packet per family (link up, then DHCP done), and its first AirPlay lookup. */
+    data class PeerMdns(val ipv6: Boolean, val asksAirPlay: Boolean) : CarPlayBonjourEvent
 }
 
 /** Saved reports need discovery outcomes without phone names, addresses, or pairing identifiers. */
@@ -70,6 +79,8 @@ fun CarPlayBonjourEvent.diagnosticSummary(): String = when (this) {
         "control probe stage=$stage attempt=$attempt family=${if (ipv6) "IPv6" else "IPv4"}"
     is CarPlayBonjourEvent.ProbeFailed ->
         "control probe failed after=$stage attempt=$attempt failureClass=${error.javaClass.simpleName}"
+    is CarPlayBonjourEvent.PeerMdns ->
+        "phone mDNS ${if (asksAirPlay) "AirPlay lookup" else "first packet"} family=${if (ipv6) "IPv6" else "IPv4"}"
 }
 
 /** Pure protocol values shared by the Android runtime and JVM tests. */
@@ -152,7 +163,7 @@ class CarPlayBonjour(
     }
     private val services = LinkedBlockingQueue<NsdServiceInfo>()
     private val interfaceServices = LinkedBlockingQueue<Pair<CarPlayBonjourEndpoint, InetAddress>>()
-    private val discoveryEvents = LinkedBlockingQueue<CarPlayBonjourEvent.Discovery>(32)
+    private val discoveryEvents = LinkedBlockingQueue<CarPlayBonjourEvent>(32)
     private val seenServices = ConcurrentHashMap.newKeySet<String>()
     private val lifecycleLock = Any()
     private val localAdvertisedAddress = advertisedHostAddress()
@@ -296,6 +307,8 @@ class CarPlayBonjour(
                             0, 0, CarPlayBonjourProtocol.airPlayTxtRecords(config, identity),
                         ))
                     }
+                    startedNs = System.nanoTime()
+                    advertisedAddresses.forEach(::watchPhoneMdns)
                     publishedFamilies = advertisedAddresses.joinToString(",") {
                         if (it is Inet4Address) "IPv4" else "IPv6"
                     }
@@ -404,6 +417,7 @@ class CarPlayBonjour(
             if (useInterfaceMdns) {
                 try {
                     while (true) emit(discoveryEvents.poll() ?: break)
+                    requeryCarPlayControl()
                     val (endpoint, address) = interfaceServices.poll(
                         WORKER_POLL_MILLIS, TimeUnit.MILLISECONDS,
                     ) ?: continue
@@ -618,6 +632,51 @@ class CarPlayBonjour(
         return line.toString(StandardCharsets.US_ASCII.name()).removeSuffix("\r")
     }
 
+    @Volatile private var startedNs = 0L
+    private var lastRequeryNs = 0L
+
+    /**
+     * JmDNS asks for the phone's control service only right after start, seconds before the
+     * phone joins. Ask again each second until it answers, so the connect probe can go out
+     * as soon as the phone is on the hotspot.
+     */
+    private fun requeryCarPlayControl() {
+        val now = System.nanoTime()
+        if (seenServices.isNotEmpty() || now - startedNs > REQUERY_WINDOW_NS || now - lastRequeryNs < REQUERY_PERIOD_NS) return
+        lastRequeryNs = now
+        val dnsList = synchronized(lifecycleLock) { interfaceMdns.toList() }
+        dnsList.forEach { dns ->
+            runCatching { (dns as? JmDNSImpl)?.startServiceResolver("$CARPLAY_CONTROL_SERVICE_TYPE.local.") }
+        }
+    }
+
+    /** Diagnostics only: timestamps the phone's first mDNS traffic on the hotspot. */
+    private fun watchPhoneMdns(local: InetAddress) = Thread({
+        val ipv6 = local is Inet6Address
+        runCatching {
+            MulticastSocket(null as SocketAddress?).use { socket ->
+                socket.reuseAddress = true
+                socket.bind(InetSocketAddress(MDNS_PORT))
+                socket.soTimeout = 500
+                val group = InetAddress.getByName(if (ipv6) "ff02::fb" else "224.0.0.251")
+                socket.joinGroup(InetSocketAddress(group, MDNS_PORT), NetworkInterface.getByInetAddress(local))
+                val buffer = ByteArray(9000)
+                var seen = false
+                var askedAirPlay = false
+                while (!closed && !askedAirPlay && System.nanoTime() - startedNs < PEER_WATCH_NS) {
+                    val packet = DatagramPacket(buffer, buffer.size)
+                    try { socket.receive(packet) } catch (_: SocketTimeoutException) { continue }
+                    val from = packet.address
+                    if ((from is Inet6Address) != ipv6 || advertisedAddresses.any { it.address.contentEquals(from.address) }) continue
+                    val asksAirPlay = packet.length > 2 && buffer[2].toInt() and 0x80 == 0 &&
+                        String(buffer, 0, packet.length, StandardCharsets.ISO_8859_1).contains("_airplay")
+                    if (!seen) { seen = true; discoveryEvents.offer(CarPlayBonjourEvent.PeerMdns(ipv6, false)) }
+                    if (asksAirPlay) { askedAirPlay = true; discoveryEvents.offer(CarPlayBonjourEvent.PeerMdns(ipv6, true)) }
+                }
+            }
+        }.onFailure { Log.w(TAG, "Phone mDNS watch failed", it) }
+    }, "carplay-mdns-watch").apply { isDaemon = true; start() }
+
     private fun sourceAddressFor(target: InetAddress): InetAddress? =
         advertisedAddresses.firstOrNull { (it is Inet4Address) == (target is Inet4Address) }
 
@@ -635,6 +694,7 @@ class CarPlayBonjour(
                 lastProbe.set(event.stage.name)
             }
             is CarPlayBonjourEvent.ProbeFailed -> lastProbe.set("failed_after_${event.stage}_${event.error.javaClass.simpleName}")
+            is CarPlayBonjourEvent.PeerMdns -> Unit
             is CarPlayBonjourEvent.Probed -> {
                 val status = event.statusLine?.let { Regex("^HTTP/\\d(?:\\.\\d)? (\\d{3})(?: |$)").find(it)?.groupValues?.get(1)?.toIntOrNull() }
                 if (status != null && status in 200..299) successfulProbeCount.incrementAndGet()
@@ -666,6 +726,10 @@ class CarPlayBonjour(
         const val AIRPLAY_SERVICE_TYPE = "_airplay._tcp"
         const val CARPLAY_CONTROL_SERVICE_TYPE = "_carplay-ctrl._tcp"
         const val WORKER_POLL_MILLIS = 500L
+        const val MDNS_PORT = 5353
+        const val REQUERY_PERIOD_NS = 1_000_000_000L
+        const val REQUERY_WINDOW_NS = 30_000_000_000L
+        const val PEER_WATCH_NS = 60_000_000_000L
         const val RESOLVE_ATTEMPTS = 3
         const val RESOLVE_TIMEOUT_MILLIS = 10_000L
         const val RESOLVE_RETRY_DELAY_MILLIS = 250L
