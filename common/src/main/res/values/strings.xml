@@ -18,7 +18,10 @@
     <string name="settings_wifi_direct_auto_band">Auto · %1$s</string>
     <string name="settings_wifi_direct_band_note">Auto · 5 GHz and Auto · 2.4 GHz keep Wi-Fi Direct in that band and let the car choose the channel. If the car cannot use that band, the connection stops with a message instead of switching band.</string>
     <string name="hotspot_hint_manual">Built-in car hotspot · Keep the car hotspot, Bluetooth and your iPhone’s Wi-Fi on.</string>
-    <string name="hotspot_hint_local">Open Connection setup to save your built-in car hotspot details.</string>
+    <string name="hotspot_hint_local">DiPlay starts its own hotspot each time it connects.</string>
+    <string name="own_hotspot_title">DiPlay\'s own hotspot</string>
+    <string name="own_hotspot_description">For tablets with no hotspot setting. DiPlay starts a private hotspot each time it connects, with a new password the iPhone gets over Bluetooth.</string>
+    <string name="own_hotspot_instructions">Nothing to set up. Keep Wi-Fi and Bluetooth on and allow Nearby devices. Android picks the band; diagnostics show which one it used.</string>
     <string name="hotspot_hint_p2p">Wi-Fi Direct · Keep the car’s Wi-Fi switch, Bluetooth and your iPhone’s Wi-Fi on.</string>
     <string name="cluster_size_standard">Standard · sharpest</string>
     <string name="cluster_size_larger">Larger · default</string>

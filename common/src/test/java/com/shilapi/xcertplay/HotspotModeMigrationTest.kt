@@ -15,12 +15,12 @@ class HotspotModeMigrationTest {
     private val context get() = RuntimeEnvironment.getApplication()
     private val prefs get() = context.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE)
 
-    @Test fun oldLocalSelectionMigratesWithoutLosingCarHotspotDetails() {
+    @Test fun ownHotspotSelectionIsKeptWithCarHotspotDetails() {
         prefs.edit().putString("wireless_hotspot_mode", "LOCAL_ONLY_HOTSPOT").apply()
         AirPlayPersistence.saveManualHotspotSsid(context, "Test car")
         AirPlayPersistence.saveManualHotspotPassphrase(context, "test-password")
-        assertEquals(WirelessHotspotMode.MANUAL, AirPlayPersistence.loadWirelessHotspotMode(context))
-        assertEquals("MANUAL", prefs.getString("wireless_hotspot_mode", null))
+        assertEquals(WirelessHotspotMode.LOCAL_ONLY_HOTSPOT, AirPlayPersistence.loadWirelessHotspotMode(context))
+        assertEquals("LOCAL_ONLY_HOTSPOT", prefs.getString("wireless_hotspot_mode", null))
         assertEquals("Test car", AirPlayPersistence.loadManualHotspotSsid(context))
         assertEquals("test-password", AirPlayPersistence.loadManualHotspotPassphrase(context))
     }

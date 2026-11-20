@@ -3518,10 +3518,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun wirelessLinkControls(parent: LinearLayout) {
         val mode = if (pendingCarHotspotSetup) WirelessHotspotMode.MANUAL else AirPlayPersistence.loadWirelessHotspotMode(this)
-        val modes = listOf(WirelessHotspotMode.MANUAL, WirelessHotspotMode.WIFI_P2P, WirelessHotspotMode.EXISTING_WIFI)
-        val titles = listOf(getString(R.string.settings_built_in_car_hotspot_recommended), getString(R.string.wifi_direct), getString(R.string.existing_wifi_title))
+        val modes = listOf(WirelessHotspotMode.MANUAL, WirelessHotspotMode.LOCAL_ONLY_HOTSPOT, WirelessHotspotMode.WIFI_P2P, WirelessHotspotMode.EXISTING_WIFI)
+        val titles = listOf(getString(R.string.settings_built_in_car_hotspot_recommended), getString(R.string.own_hotspot_title),
+            getString(R.string.wifi_direct), getString(R.string.existing_wifi_title))
         val descriptions = listOf(
             getString(R.string.hotspot_mode_manual_desc),
+            getString(R.string.own_hotspot_description),
             getString(R.string.hotspot_mode_p2p_desc),
             getString(R.string.existing_wifi_description)
         )
@@ -3597,6 +3599,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 labelFactory = { label(it, 15, MUTED) }, buttonFactory = { title, click -> button(title, false, click) })
                 .also { hotspotJoinControls = it }
             parent.addView(join.build())
+        } else if (mode == WirelessHotspotMode.LOCAL_ONLY_HOTSPOT) {
+            parent.addView(label(getString(R.string.own_hotspot_instructions), 16, MUTED))
         } else if (mode == WirelessHotspotMode.EXISTING_WIFI) {
             parent.addView(label(getString(R.string.existing_wifi_instructions), 16, MUTED))
             parent.addView(button(getString(R.string.open_car_wi_fi_settings), false) { openCarClientWifiSettings() }, matchButton(12, 60))

@@ -89,7 +89,11 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             )
             val liveRadio = awaitRadioInfo(radioInfo, apInterface, configuration, attempt, deadlineNanos)
             if (liveRadio?.frequencyMHz?.let { it !in 5160..5895 } ?: (configuration.bandLabel != "5 GHz")) {
-                throw IOException("This firmware did not provide the requested 5 GHz local hotspot; choose Wi-Fi Direct or Car hotspot")
+                // A tablet with no other hotspot is better served by 2.4 GHz than by none; refuse only an unknown channel.
+                if (liveRadio == null && configuration.channel <= 0) {
+                    throw IOException("This firmware did not provide the requested 5 GHz local hotspot; choose Wi-Fi Direct or Car hotspot")
+                }
+                onDiagnostic("LocalOnlyHotspot: firmware chose ${liveRadio?.frequencyMHz?.let { "$it MHz" } ?: configuration.bandLabel}, not 5 GHz; continuing")
             }
 
             synchronized(stateLock) {
