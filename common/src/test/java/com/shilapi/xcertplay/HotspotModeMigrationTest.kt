@@ -30,6 +30,22 @@ class HotspotModeMigrationTest {
         assertEquals(WirelessHotspotMode.MANUAL, AirPlayPersistence.loadWirelessHotspotMode(context))
     }
 
+    @Test fun unchosenBuiltInHotspotMovesToOwnHotspotOnce() {
+        prefs.edit().clear().putString("wireless_hotspot_mode", "MANUAL").apply()
+        AirPlayPersistence.preferOwnHotspotOnce(context)
+        assertEquals(WirelessHotspotMode.LOCAL_ONLY_HOTSPOT, AirPlayPersistence.loadWirelessHotspotMode(context))
+        AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.MANUAL)
+        AirPlayPersistence.preferOwnHotspotOnce(context)
+        assertEquals(WirelessHotspotMode.MANUAL, AirPlayPersistence.loadWirelessHotspotMode(context))
+    }
+
+    @Test fun pickedModeIsNotMoved() {
+        prefs.edit().clear().apply()
+        AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.WIFI_P2P)
+        AirPlayPersistence.preferOwnHotspotOnce(context)
+        assertEquals(WirelessHotspotMode.WIFI_P2P, AirPlayPersistence.loadWirelessHotspotMode(context))
+    }
+
     @Test fun existingWifiDirectSelectionIsPreserved() {
         AirPlayPersistence.saveWirelessHotspotMode(context, WirelessHotspotMode.WIFI_P2P)
         assertEquals(WirelessHotspotMode.WIFI_P2P, AirPlayPersistence.loadWirelessHotspotMode(context))

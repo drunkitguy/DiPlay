@@ -54,6 +54,8 @@ object AirPlayPersistence {
     private const val KEY_NAVIGATION_STREAM_TYPE = "navigation_stream_type"
     private const val KEY_WIRELESS_ENABLED = "wireless_enabled"
     private const val KEY_WIRELESS_HOTSPOT_MODE = "wireless_hotspot_mode"
+    private const val KEY_WIRELESS_HOTSPOT_MODE_CHOSEN = "wireless_hotspot_mode_chosen"
+    private const val KEY_OWN_HOTSPOT_DEFAULT_APPLIED = "own_hotspot_default_applied"
     private const val KEY_WIFI_P2P_PREFERRED_CHANNEL = "wifi_p2p_preferred_channel"
     /** Read by CarPlayController in the shared module under the same name. */
     const val KEY_WIFI_DIRECT_SCAN_PAUSE = "wifi_direct_scan_pause"
@@ -398,14 +400,25 @@ object AirPlayPersistence {
         val stored = prefs.getString(KEY_WIRELESS_HOTSPOT_MODE, null)
         val mode = WirelessHotspotMode.entries.firstOrNull { it.name == stored }
             ?: WirelessHotspotMode.MANUAL
-        if (stored != mode.name) saveWirelessHotspotMode(context, mode)
+        if (stored != mode.name) prefs.edit().putString(KEY_WIRELESS_HOTSPOT_MODE, mode.name).apply()
         return mode
     }
 
     fun saveWirelessHotspotMode(context: Context, mode: WirelessHotspotMode) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_WIRELESS_HOTSPOT_MODE, mode.name)
+            .putBoolean(KEY_WIRELESS_HOTSPOT_MODE_CHOSEN, true)
             .apply()
+    }
+
+    /** Car-tablet fork: tablets have no hotspot setting, so move to DiPlay's own hotspot once, unless the driver picked a mode. */
+    fun preferOwnHotspotOnce(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || prefs.getBoolean(KEY_OWN_HOTSPOT_DEFAULT_APPLIED, false)) return
+        val edit = prefs.edit().putBoolean(KEY_OWN_HOTSPOT_DEFAULT_APPLIED, true)
+        if (!prefs.getBoolean(KEY_WIRELESS_HOTSPOT_MODE_CHOSEN, false))
+            edit.putString(KEY_WIRELESS_HOTSPOT_MODE, WirelessHotspotMode.LOCAL_ONLY_HOTSPOT.name)
+        edit.apply()
     }
 
     fun loadWifiP2pPreferredChannel(context: Context): Int = runCatching {

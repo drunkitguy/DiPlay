@@ -379,6 +379,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         if (savedInstanceState == null && isLauncherIntent(intent) && CarPlayBackgroundSession.hasSession()) {
             openProjection(); finish(); return
         }
+        AirPlayPersistence.preferOwnHotspotOnce(this)
         scheduleBackgroundUpdateChecks()
         availableUpdate = UpdateAvailability.available(this, version())
         enforceInterfaceSize()
