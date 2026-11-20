@@ -19,6 +19,9 @@
     <string name="wifi_direct">Wi-Fi Direct</string>
     <string name="hotspot_hint_manual">車載熱點 · 保持車載熱點、藍牙和 iPhone 的 Wi-Fi 開啟。</string>
     <string name="hotspot_hint_local">開啟「連線設定」以儲存車載熱點資訊。</string>
+    <string name="own_hotspot_title">DiPlay 自有熱點</string>
+    <string name="own_hotspot_description">適用於沒有熱點設定的平板。DiPlay 每次連線時會啟動專用熱點，並透過藍牙將新密碼傳給 iPhone。</string>
+    <string name="own_hotspot_instructions">無需設定。請保持 Wi-Fi 與藍牙開啟並允許鄰近裝置。頻段由 Android 選擇，診斷資訊會顯示實際使用的頻段。</string>
     <string name="hotspot_hint_p2p">Wi-Fi Direct · 保持車機 Wi-Fi 開關、藍牙和 iPhone 的 Wi-Fi 開啟。</string>
     <string name="cluster_size_standard">標準 · 最清晰</string>
     <string name="cluster_size_larger">較大 · 預設</string>

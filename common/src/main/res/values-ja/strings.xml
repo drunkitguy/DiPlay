@@ -24,6 +24,9 @@
     <string name="wifi_direct_channel_description">自動ではチャンネルを自動選択します。手動で指定できるチャンネルは車載端末によって異なります。変更は次回のWi-Fi Direct接続から有効です。</string>
     <string name="hotspot_hint_manual">車載ホットスポット · 車のホットスポットとBluetooth、iPhoneのWi-Fiをオンにしてください。</string>
     <string name="hotspot_hint_local">接続設定を開き、車載ホットスポットの情報を保存してください。</string>
+    <string name="own_hotspot_title">DiPlay 独自のホットスポット</string>
+    <string name="own_hotspot_description">ホットスポット設定がないタブレット向け。DiPlay は接続のたびに専用ホットスポットを起動し、新しいパスワードを Bluetooth で iPhone に渡します。</string>
+    <string name="own_hotspot_instructions">設定は不要です。Wi-Fi と Bluetooth をオンにし、付近のデバイスを許可してください。帯域は Android が選び、診断に表示されます。</string>
     <string name="hotspot_hint_p2p">Wi-Fi Direct · 車載端末のWi-FiスイッチとBluetooth、iPhoneのWi-Fiをオンにしてください。</string>
     <string name="cluster_size_standard">標準 · 最も鮮明</string>
     <string name="cluster_size_larger">大きい · 標準設定</string>
