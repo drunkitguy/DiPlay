@@ -6980,7 +6980,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         private fun requestedPage(intent: Intent): String? = intent.getStringExtra("page")?.takeIf { it in INTENT_PAGES }
 
         internal fun isLauncherIntent(intent: Intent): Boolean =
-            intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER) &&
+            intent.action == Intent.ACTION_MAIN &&
+                (intent.hasCategory(Intent.CATEGORY_LAUNCHER) || intent.hasCategory(Intent.CATEGORY_HOME)) &&
                 !intent.hasExtra("page")
 
         private const val BYD_VEHICLE_TAG = "DiPlay-BYD13"

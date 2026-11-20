@@ -900,9 +900,9 @@ open class CarPlayHostActivity : ComponentActivity() {
                         closePicturePanel()
                     } else if (menuOpen) {
                         if (safeAreaEditorActive) closeSafeAreaEditor() else leaveSettingsMenu()
-                    } else {
+                    } else if (activeAirPlaySession == null) {
                         showDiPlayHome()
-                    }
+                    } // Car tablet: while CarPlay is connected, back stays in CarPlay.
                 }
             },
         )
