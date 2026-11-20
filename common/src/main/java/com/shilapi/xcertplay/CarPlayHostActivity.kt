@@ -875,6 +875,8 @@ open class CarPlayHostActivity : ComponentActivity() {
             finish(); return
         }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Car tablet: it boots on ignition to the lock screen; CarPlay shows over it, the tablet stays locked.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) setShowWhenLocked(true)
         getSystemService(android.hardware.display.DisplayManager::class.java)
             ?.registerDisplayListener(clusterDisplayListener, mainHandler)
         initializeSessionLog()

@@ -1806,6 +1806,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     AirPlayPersistence.loadWirelessHotspotMode(this) == WirelessHotspotMode.MANUAL },
                 permissions = { listOf(CarHotspotSetup.Permission.BOOT_LAUNCH) }) {
                 AirPlayPersistence.saveAutoStartOnBoot(this, it)
+                // Without ADB the grant is the driver's: Android opens nothing from the boot broadcast without it.
+                if (it && AirPlayPersistence.loadWirelessHotspotMode(this) != WirelessHotspotMode.MANUAL &&
+                    !Settings.canDrawOverlays(this)) openOverlayPermission()
             }
             val autoConfirmActive = UsbPermissionSetup.Permission.ACCESSIBILITY.granted(this)
             toggle(
