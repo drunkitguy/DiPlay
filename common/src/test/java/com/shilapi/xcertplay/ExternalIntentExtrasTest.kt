@@ -100,6 +100,7 @@ class ExternalIntentExtrasTest {
 
     private fun enableBluetoothWake() {
         DiPlayPreferences.saveConnectOnPhoneBluetooth(app, true)
+        DiPlayPreferences.saveAutoConnect(app, false) // isolate the Bluetooth path from connect-on-open
         DiPlayPreferences.savePhone(app, phone, "iPhone")
         AirPlayPersistence.saveWirelessHotspotMode(app, WirelessHotspotMode.WIFI_P2P)
         app.getSharedPreferences("diplay", 0).edit().putBoolean("notification_asked", true).commit()

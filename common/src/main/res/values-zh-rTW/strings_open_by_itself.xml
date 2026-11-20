@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_by_itself_title">自動開啟 CarPlay</string>
+    <string name="open_by_itself_message">若要在汽車啟動和 iPhone 連線時顯示 CarPlay，請允許 DiPlay 顯示在其他應用程式上層。</string>
+    <string name="open_by_itself_allow">允許</string>
+</resources>
