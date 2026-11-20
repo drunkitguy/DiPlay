@@ -1351,6 +1351,7 @@ class CarPlayController(
                 state = activeAdapter?.state,
                 pausedByDiPlay = BydBluetoothSuspend.isSuspendedByUs(appContext),
             )?.let { throw BluetoothRadioCheck.failure(it) }
+            val earlyRfcomm = startEarlyRfcomm(generation)
             val hotspotInfo = startWirelessHotspot(generation)
             if (isStaleWirelessRun(generation)) {
                 return
@@ -1517,17 +1518,28 @@ class CarPlayController(
                 "wireless RFCOMM connecting address=${device.address} " +
                     "uuid=$IAP2_IPHONE_UUID",
             )
-            val socket = synchronized(wirelessResourceLock) {
+            val early = earlyRfcomm?.takeIf { it.connectedTo(device) }
+            if (early == null && earlyRfcomm != null) {
+                runCatching { earlyRfcomm.socket.close() }
+                synchronized(wirelessResourceLock) { if (bluetoothSocket === earlyRfcomm.socket) bluetoothSocket = null }
+                debugLog("wireless early RFCOMM unused; connecting again failureClass=" +
+                    (earlyRfcomm.error?.let(::diagnosticFailureClass) ?: "none"))
+            }
+            val socket = early?.socket ?: synchronized(wirelessResourceLock) {
                 if (isStaleWirelessRun(generation)) return
                 device.createRfcommSocketToServiceRecord(UUID.fromString(IAP2_IPHONE_UUID))
                     .also { bluetoothSocket = it }
             }
-            logBluetoothConnectionSnapshot(device, "before-connect")
+            if (early == null) logBluetoothConnectionSnapshot(device, "before-connect")
             val bluetoothStarted = System.nanoTime()
             val bluetoothConnectMillis: Long
             try {
-                connectBluetoothSocket(socket, device.address)
-                bluetoothConnectMillis = elapsedMillis(bluetoothStarted)
+                if (early != null) {
+                    bluetoothConnectMillis = early.connectMillis
+                } else {
+                    connectBluetoothSocket(socket, device.address)
+                    bluetoothConnectMillis = elapsedMillis(bluetoothStarted)
+                }
                 connectionDiagnostic("Bluetooth connect completed elapsedMs=$bluetoothConnectMillis " +
                     "socketReportedConnected=${runCatching { socket.isConnected }.getOrNull() ?: "unknown"}")
             } catch (error: Throwable) {
@@ -2718,6 +2730,45 @@ class CarPlayController(
             "Android Bluetooth on this head unit reports ${BluetoothLinkCheck.UNREAL_MARK}: " +
                 "a connection to a service no phone offers also succeeded in ${controlMillis}ms",
         )
+    }
+
+    /** RFCOMM to the iPhone, connected while the hotspot starts instead of after it (car tablet boot time). */
+    private class EarlyRfcomm(val device: BluetoothDevice, val socket: BluetoothSocket) {
+        val done = CountDownLatch(1)
+        @Volatile var connectMillis = 0L
+        @Volatile var error: Throwable? = null
+
+        /** Waits out a connect still running; false when it failed or went to another device. */
+        fun connectedTo(target: BluetoothDevice): Boolean {
+            if (!device.address.equals(target.address, ignoreCase = true)) return false
+            return done.await(RFCOMM_CONNECT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS) && error == null
+        }
+    }
+
+    /** Null whenever the normal connect after the hotspot should decide (no adapter, no clear iPhone). */
+    private fun startEarlyRfcomm(generation: Int): EarlyRfcomm? {
+        val adapter = currentBluetoothAdapter()?.takeIf { it.isEnabled } ?: return null
+        val device = runCatching { selectWirelessBluetoothDevice(adapter) }.getOrNull() ?: return null
+        val socket = synchronized(wirelessResourceLock) {
+            if (isStaleWirelessRun(generation) || bluetoothSocket != null) return null
+            runCatching { device.createRfcommSocketToServiceRecord(UUID.fromString(IAP2_IPHONE_UUID)) }
+                .getOrNull()?.also { bluetoothSocket = it } ?: return null
+        }
+        val early = EarlyRfcomm(device, socket)
+        debugLog("wireless RFCOMM connecting early address=${device.address} while the hotspot starts")
+        Thread({
+            val started = System.nanoTime()
+            try {
+                connectBluetoothSocket(socket, device.address)
+                early.connectMillis = elapsedMillis(started)
+                debugLog("wireless early RFCOMM connected elapsedMs=${early.connectMillis}")
+            } catch (error: Throwable) {
+                early.error = error
+            } finally {
+                early.done.countDown()
+            }
+        }, "wireless-rfcomm-early").apply { isDaemon = true; start() }
+        return early
     }
 
     private fun connectBluetoothSocket(socket: BluetoothSocket, address: String) {
