@@ -556,7 +556,23 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 DiPlayPreferences.autoConnect(this) && requestedPage(intent) == null && page != "setup") {
                 handler.post { connect(DiPlayPreferences.autoConnectWireless(this)) }
             }
+            askToOpenByItselfOnce()
         }
+    }
+
+    /** Android opens DiPlay at boot or on the iPhone's Bluetooth only with Display over other apps. */
+    private fun askToOpenByItselfOnce() {
+        val prefs = getSharedPreferences("diplay", MODE_PRIVATE)
+        if (prefs.getBoolean("open_by_itself_asked", false) || setupError != null || page != "home" ||
+            DiPlayPreferences.phoneAddress(this) == null || Settings.canDrawOverlays(this) ||
+            !(AirPlayPersistence.loadAutoStartOnBoot(this) || DiPlayPreferences.connectOnPhoneBluetooth(this))) return
+        prefs.edit().putBoolean("open_by_itself_asked", true).apply()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.open_by_itself_title)
+            .setMessage(R.string.open_by_itself_message)
+            .setPositiveButton(R.string.open_by_itself_allow) { _, _ -> openOverlayPermission() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
     override fun onPause() {
         appearanceUpdatesResumed = false

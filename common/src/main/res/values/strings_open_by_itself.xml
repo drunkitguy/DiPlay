@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_by_itself_title">Open CarPlay by itself</string>
+    <string name="open_by_itself_message">To show CarPlay when the car starts and when your iPhone connects, allow DiPlay to display over other apps.</string>
+    <string name="open_by_itself_allow">Allow</string>
+</resources>
