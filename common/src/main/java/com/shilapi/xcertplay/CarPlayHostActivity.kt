@@ -876,8 +876,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // Car tablet: it boots on ignition to the lock screen; CarPlay shows over it, the tablet stays locked.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) setShowWhenLocked(true)
-        skipInsecureLockScreen()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         getSystemService(android.hardware.display.DisplayManager::class.java)
             ?.registerDisplayListener(clusterDisplayListener, mainHandler)
         initializeSessionLog()
@@ -1208,6 +1207,7 @@ open class CarPlayHostActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        skipInsecureLockScreen(::appendLog)
         WheelKeyService.restoreIfNeeded(this)
         hostAppearanceResumed = true
         updateCallPopupGuard()
@@ -5398,6 +5398,7 @@ open class CarPlayHostActivity : ComponentActivity() {
                     if (controllerGeneration != restartGeneration || activeAirPlaySession !== session || shuttingDown.get()) return@runOnUiThread
                     val firstFrame = startupRetryBudget.firstFrame(session, android.os.SystemClock.elapsedRealtime())
                     if (firstFrame) appendLog("Main video first frame rendered; cluster output may start")
+                    if (firstFrame) { wakeScreenForCarPlay(::appendLog); skipInsecureLockScreen(::appendLog) }
                     ensureClusterPresentation()
                     if (!firstFrame) return@runOnUiThread
                     mainHandler.postDelayed({
