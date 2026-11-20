@@ -555,10 +555,8 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             val networkInterface = findInterface(bssid, previousAddresses, previousUpstreams)
             if (networkInterface != null) {
                 networkInterface.hotspotAddress()?.let { hostAddress ->
+                    // With no BSSID from either side the iPhone gets DiPlay's saved device id instead.
                     val interfaceBssid = networkInterface.interfaceBssid()
-                    if (bssid == null && interfaceBssid == null) {
-                        return@let
-                    }
                     return ApInterface(
                         name = networkInterface.name,
                         hostAddress = hostAddress,
@@ -569,7 +567,11 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
 
             val remainingNanos = deadlineNanos - System.nanoTime()
             if (remainingNanos <= 0) {
-                throw IOException("LocalOnlyHotspot started but its AP interface/address could not be identified")
+                val seen = activeInterfaces().joinToString { net ->
+                    "${net.name}${net.siteLocalIpv4Addresses()} mac=${if (net.interfaceBssid() == null) "none" else "known"}"
+                }
+                throw IOException("LocalOnlyHotspot started but its AP interface/address could not be identified " +
+                    "(interfaces: $seen; before: $previousAddresses; upstream: ${previousUpstreams + upstreamInterfaceNames()})")
             }
             try {
                 TimeUnit.NANOSECONDS.sleep(minOf(remainingNanos, INTERFACE_POLL_NANOS))

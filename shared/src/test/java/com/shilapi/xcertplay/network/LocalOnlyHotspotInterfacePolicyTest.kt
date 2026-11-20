@@ -30,6 +30,15 @@ class LocalOnlyHotspotInterfacePolicyTest {
     @Test fun configuredIdentityCanResolveAnExistingSharedApButNeverAnotherBssid() {
         val ap = net("ap0", "192.168.43.1", "00:11:22:33:44:55")
         assertEquals(ap, LocalOnlyHotspotInterfacePolicy.select(listOf(ap), ap.ipv4, emptySet(), ap.bssid))
-        assertNull(LocalOnlyHotspotInterfacePolicy.select(listOf(ap), emptySet(), emptySet(), "00:11:22:33:44:66"))
+        assertNull(LocalOnlyHotspotInterfacePolicy.select(listOf(ap), ap.ipv4, emptySet(), "00:11:22:33:44:66"))
+    }
+
+    @Test fun hiddenMacFallsBackToTheOneApThatGainedAnAddress() {
+        val station = net("wlan0", "192.168.1.20")
+        val ap = net("wlan1", "192.168.66.1")
+        assertEquals(ap, LocalOnlyHotspotInterfacePolicy.select(listOf(station, ap), station.ipv4, setOf("wlan0"), "00:11:22:33:44:55"))
+        val bridged = net("ap_br_wlan1", "192.168.66.1")
+        assertEquals(bridged, LocalOnlyHotspotInterfacePolicy.select(listOf(bridged), emptySet(), emptySet(), null))
+        assertNull(LocalOnlyHotspotInterfacePolicy.select(listOf(ap, net("wlan2", "192.168.67.1")), emptySet(), emptySet(), "00:11:22:33:44:55"))
     }
 }
