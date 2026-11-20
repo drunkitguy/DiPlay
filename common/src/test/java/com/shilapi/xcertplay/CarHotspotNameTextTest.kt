@@ -28,6 +28,8 @@ class CarHotspotNameTextTest {
 
     @Before fun setUp() {
         clearSettings()
+        // These tests cover the Built-in car hotspot mode, which the car-tablet fork no longer defaults to.
+        AirPlayPersistence.saveWirelessHotspotMode(context, com.shilapi.xcertplay.orchestration.WirelessHotspotMode.MANUAL)
         // The car hotspot is off, as on a head unit that has just been switched on.
         context.sendStickyBroadcast(Intent("android.net.wifi.WIFI_AP_STATE_CHANGED")
             .putExtra("wifi_state", 11).putExtra("wifi_ap_mode", 1))
