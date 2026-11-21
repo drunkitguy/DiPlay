@@ -23,6 +23,7 @@ internal object UpdateClient {
         accept: String?,
         userAgent: String,
         openConnection: (URL) -> URLConnection = { it.openConnection() },
+        headers: Map<String, String> = emptyMap(),
     ): String {
         val connection = openConnection(URL(url)) as? HttpURLConnection
             ?: throw IOException("Request to $url did not open an HTTP connection")
@@ -33,6 +34,7 @@ internal object UpdateClient {
             connection.useCaches = false
             accept?.let { connection.setRequestProperty("Accept", it) }
             connection.setRequestProperty("User-Agent", userAgent)
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             val statusCode = connection.responseCode
             val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.use { readUtf8Limited(url, it) }.orEmpty()
@@ -43,13 +45,20 @@ internal object UpdateClient {
         }
     }
 
-    internal fun download(url: String, destination: File, onProgress: (Long, Long?) -> Unit) {
+    internal fun download(
+        url: String,
+        destination: File,
+        headers: Map<String, String> = emptyMap(),
+        onProgress: (Long, Long?) -> Unit,
+    ) {
         destination.parentFile?.mkdirs()
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = CONNECT_TIMEOUT_MILLIS
             connection.readTimeout = READ_TIMEOUT_MILLIS
             connection.useCaches = false
+            // The private repo's assets redirect to a signed storage URL; the platform drops Authorization across hosts.
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             val statusCode = connection.responseCode
             if (statusCode !in 200..299) throw IOException("Download from $url failed: $statusCode")
             val total = connection.contentLengthLong.takeIf { it > 0 }

@@ -8,7 +8,9 @@ internal object UpdateReleaseLookup {
         installedVersion: String,
         userAgent: String,
         openConnection: (URL) -> URLConnection = { it.openConnection() },
+        carTablet: CarTabletUpdates.Setup? = null,
     ): UpdateRelease? {
+        if (carTablet != null) return CarTabletUpdates.latest(carTablet, userAgent, openConnection)
         val json = UpdateClient.fetchText(
             UpdateClient.RELEASES_URL,
             "application/vnd.github+json",

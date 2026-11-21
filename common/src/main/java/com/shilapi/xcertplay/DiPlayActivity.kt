@@ -95,6 +95,7 @@ import com.shilapi.xcertplay.update.BackgroundUpdateScheduler
 import com.shilapi.xcertplay.update.UpdateApkExport
 import com.shilapi.xcertplay.update.UpdateAvailability
 import com.shilapi.xcertplay.update.UpdateCatalog
+import com.shilapi.xcertplay.update.CarTabletUpdates
 import com.shilapi.xcertplay.update.UpdateChecksums
 import com.shilapi.xcertplay.update.UpdateClient
 import com.shilapi.xcertplay.update.UpdateRelease
@@ -2732,7 +2733,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun latestRelease(): UpdateRelease? {
-        return UpdateReleaseLookup.latest(version(), userAgent())
+        return UpdateReleaseLookup.latest(version(), userAgent(), carTablet = CarTabletUpdates.setup(this))
     }
 
     private fun openAvailableUpdate(release: UpdateRelease) {
@@ -2766,9 +2767,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 // The cached release can be a day old. Download the newest one.
                 release = latestRelease() ?: throw IOException(getString(R.string.update_up_to_date))
                 val checksumsFile = File(directory, UpdateCatalog.CHECKSUMS_FILE)
-                UpdateClient.download(release.checksumsUrl, checksumsFile) { _, _ -> }
+                UpdateClient.download(release.checksumsUrl, checksumsFile, CarTabletUpdates.headers(this, release.checksumsUrl)) { _, _ -> }
                 val apkFile = File(directory, release.apkName)
-                UpdateClient.download(release.apkUrl, apkFile) { written, total ->
+                UpdateClient.download(release.apkUrl, apkFile, CarTabletUpdates.headers(this, release.apkUrl)) { written, total ->
                     val percent = total?.takeIf { it > 0 }?.let { (written * 100 / it).toInt() } ?: return@download
                     if (percent != updateProgress) {
                         updateProgress = percent
@@ -2811,6 +2812,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun installUpdate() {
+        val file = updateFile ?: return
+        if (CarTabletUpdates.setup(this) != null && CarTabletOwner.isOwner(this)) {
+            updateMessage = getString(R.string.update_installing_silently)
+            render()
+            updateInstallWorker(Runnable {
+                runCatching { CarTabletUpdates.install(this, file) }.onFailure { failure ->
+                    Log.w("DiPlay-Update", "silent install failed", failure)
+                    runOnUiThread { updateMessage = getString(R.string.update_failed); render() }
+                }
+            })
+            return
+        }
         // No unknown-sources pre-check: some head units answer its settings page with "Not supported yet".
         // The chosen installer asks for that permission itself.
         installApk(updateFile ?: return)

@@ -190,6 +190,21 @@
         </receiver>
 
         <receiver
+            android:name="com.shilapi.xcertplay.update.CarTabletUpdateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Sets the car tablet's update token from adb; only the shell holds DUMP. -->
+        <receiver
+            android:name="com.shilapi.xcertplay.update.CarTabletUpdateToken"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            tools:ignore="ExportedReceiver" />
+
+        <receiver
             android:name="com.shilapi.xcertplay.BootReceiver"
             android:enabled="true"
             android:exported="true">

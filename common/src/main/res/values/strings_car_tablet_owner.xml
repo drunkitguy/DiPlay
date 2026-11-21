@@ -6,4 +6,5 @@
     <string name="device_owner_description">DiPlay turns the tablet\'s Wi-Fi off by itself and can pin CarPlay. Turn off to give device owner back.</string>
     <string name="device_owner_release_message">Give device owner back? DiPlay will stop turning Wi-Fi off by itself and stop pinning CarPlay. Setting it up again needs adb.</string>
     <string name="device_owner_release">Give back</string>
+    <string name="update_installing_silently">Installing the update. DiPlay restarts when it\'s done.</string>
 </resources>
