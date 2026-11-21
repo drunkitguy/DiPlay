@@ -434,6 +434,10 @@ open class CarPlayHostActivity : ComponentActivity() {
     private var revealInSettingsMenu: (View) -> Unit = {}
     private var locationReportingSwitch: Switch? = null
     private var statusView: TextView? = null
+    private var connectionDetails: View? = null
+    private val revealConnectionDetails = Runnable {
+        connectionDetails?.apply { alpha = 0f; visibility = View.VISIBLE; animate().alpha(1f).setDuration(400).start() }
+    }
     private var statusScrollView: ScrollView? = null
     private var stageStatusView: TextView? = null
     private var resolutionValueView: TextView? = null
@@ -2063,27 +2067,31 @@ open class CarPlayHostActivity : ComponentActivity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        val icon = ImageView(this).apply {
-            setImageResource(R.drawable.ic_carplay)
-            contentDescription = getString(R.string.carplay)
-        }
+        // Car screen look: a spinner and one status line. Instructions and the way back fade in only if it takes a while.
+        val icon = ConnectingRing(this).apply { contentDescription = getString(R.string.carplay) }
         panel.addView(icon, LinearLayout.LayoutParams(dp(88), dp(88)))
         val title = TextView(this).apply {
             text = getString(R.string.diplay)
-            gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            visibility = View.GONE
         }
         panel.addView(title)
         val stage = TextView(this).apply {
             text = getString(R.string.getting_carplay_ready)
             gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            letterSpacing = 0.02f
         }
         panel.addView(stage)
+        val details = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+        }
         val instructions = TextView(this).apply {
             text = connectionInstructions(null)
             gravity = Gravity.CENTER
         }
-        panel.addView(instructions)
+        details.addView(instructions)
         val help = TextView(this).apply {
             gravity = Gravity.CENTER
             visibility = View.GONE
@@ -2115,22 +2123,28 @@ open class CarPlayHostActivity : ComponentActivity() {
             text = getString(R.string.back_to_diplay)
             setOnClickListener { showDiPlayHome() }
         }
-        panel.addView(back, LinearLayout.LayoutParams(dp(300), dp(64)))
+        details.addView(back, LinearLayout.LayoutParams(dp(300), dp(64)))
         val gestureHint = TextView(this).apply {
             text = settingsGestureHintText()
             gravity = Gravity.CENTER
         }
-        panel.addView(gestureHint)
+        details.addView(gestureHint)
+        panel.addView(details, LinearLayout.LayoutParams(-1, -2))
+        connectionDetails = details
         paintWaitingScreen = {
             // The connection screen is DiPlay chrome: follow the app theme, not the day/night mode sent to CarPlay.
-            val colors = WaitingScreenColors.of(appNight)
-            viewport.setBackgroundColor(colors.background)
-            title.setTextColor(colors.text)
-            stage.setTextColor(colors.text)
-            instructions.setTextColor(colors.secondary)
-            help.setTextColor(colors.secondary)
-            gestureHint.setTextColor(colors.secondary)
-            val buttonPalette = DiPlayPalette.of(appNight)
+            // Always dark, like a head unit: a soft glow behind the spinner on black.
+            viewport.background = android.graphics.drawable.GradientDrawable().apply {
+                gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
+                colors = intArrayOf(0xFF1A1D22.toInt(), Color.BLACK)
+                gradientRadius = maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) * 0.45f
+            }
+            title.setTextColor(Color.WHITE)
+            stage.setTextColor(0xE6FFFFFF.toInt())
+            instructions.setTextColor(0x99FFFFFF.toInt())
+            help.setTextColor(0x99FFFFFF.toInt())
+            gestureHint.setTextColor(0x80FFFFFF.toInt())
+            val buttonPalette = DiPlayPalette.of(true)
             back.style(DiPlayButtonKind.PRIMARY, buttonPalette, overlay = false)
             retry.style(DiPlayButtonKind.SECONDARY, buttonPalette, overlay = false)
             recovery.style(DiPlayButtonKind.SECONDARY, buttonPalette, overlay = false)
@@ -2166,8 +2180,8 @@ open class CarPlayHostActivity : ComponentActivity() {
             val iconSize = spacing(54f, 88f)
             icon.layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
             title.textSize = size(26f, 34f)
-            title.setPadding(0, spacing(8f, 18f), 0, spacing(6f, 14f))
-            stage.textSize = size(19f, 22f)
+            stage.textSize = size(20f, 26f)
+            stage.setPadding(0, spacing(20f, 36f), 0, 0)
             instructions.textSize = size(15f, 17f)
             instructions.setPadding(0, spacing(8f, 14f), 0, spacing(12f, 24f))
             help.textSize = size(15f, 17f)
@@ -2220,6 +2234,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         connectionInstructionsView = instructions
         connectionHelpView = help
         connectionPanel = viewport
+        scheduleConnectionDetails()
         updateDebugOverlays()
         return root
     }
@@ -6791,7 +6806,21 @@ open class CarPlayHostActivity : ComponentActivity() {
         // A session's end clears the streams and sets its own stage line before the next check clears the flag.
         val noPicture = noPictureShown && SCREEN_TYPE_MAIN in activeScreenStreamTypes
         if (noPicture) stageStatusView?.text = getString(R.string.iphone_sent_no_picture)
-        connectionPanel?.visibility = if (activeScreenStreamTypes.isEmpty() || noPicture) View.VISIBLE else View.GONE
+        val show = activeScreenStreamTypes.isEmpty() || noPicture
+        val panel = connectionPanel ?: return
+        if (show && panel.visibility != View.VISIBLE) {
+            panel.alpha = 0f
+            panel.animate().alpha(1f).setDuration(300).start()
+            scheduleConnectionDetails()
+        }
+        panel.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    /** Instructions and Back to DiPlay stay out of sight unless connecting takes longer than a normal start. */
+    private fun scheduleConnectionDetails() {
+        mainHandler.removeCallbacks(revealConnectionDetails)
+        connectionDetails?.visibility = View.GONE
+        mainHandler.postDelayed(revealConnectionDetails, 15_000)
     }
 
     // The keywords are English; matching the English text keeps the result the same in every UI language.
