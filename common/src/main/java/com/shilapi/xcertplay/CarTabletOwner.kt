@@ -7,6 +7,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 
 /** Car tablet: lets DiPlay become device owner (adb dpm set-device-owner) for silent Wi-Fi off and pinning. */
 class CarTabletAdminReceiver : DeviceAdminReceiver()
@@ -32,6 +33,27 @@ internal object CarTabletOwner {
     }
 
     fun admin(context: Context) = ComponentName(context, CarTabletAdminReceiver::class.java)
+
+    /** Screen brightness in percent, 0 meaning automatic. Parking saves and restores whatever is set here. */
+    fun brightnessPercent(context: Context): Int {
+        val resolver = context.contentResolver
+        if (Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, 0) == 1) return 0
+        val level = Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS, 128)
+        return ((level * 100 / 255 + 2) / 5 * 5).coerceIn(5, 100)
+    }
+
+    fun setBrightnessPercent(context: Context, percent: Int) {
+        if (!isOwner(context)) return
+        val dpm = context.getSystemService(DevicePolicyManager::class.java) ?: return
+        runCatching {
+            if (percent <= 0) {
+                dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS_MODE, "1")
+            } else {
+                dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS_MODE, "0")
+                dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS, (percent * 255 / 100).coerceIn(1, 255).toString())
+            }
+        }
+    }
 
     /** Gives device owner back, so the tablet returns to a normal setup without a reset. */
     @Suppress("DEPRECATION")

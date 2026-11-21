@@ -2,11 +2,14 @@ package com.shilapi.xcertplay
 
 import android.app.Activity
 import android.app.KeyguardManager
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.content.Intent
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.provider.Settings
+import com.shilapi.xcertplay.update.CarTabletUpdates
 
 /**
  * Car tablet: it boots on ignition to the lock screen. With no PIN, pattern or password the lock
@@ -61,4 +64,12 @@ internal fun Activity.turnOffWifiClientOnce(log: (String) -> Unit) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
     log("Wi-Fi client is on; opening the Wi-Fi panel so the driver can turn it off")
     runCatching { startActivity(Intent(Settings.Panel.ACTION_WIFI)) }
+}
+
+/** Car tablet: never portrait. Landscape at start, then held at the landscape it has, so a bump never turns CarPlay. */
+internal fun Activity.holdLandscape() {
+    if (CarTabletUpdates.setup(this) == null) return
+    val wanted = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+        ActivityInfo.SCREEN_ORIENTATION_LOCKED else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    if (requestedOrientation != wanted) requestedOrientation = wanted
 }

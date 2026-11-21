@@ -768,6 +768,7 @@ open class CarPlayHostActivity : ComponentActivity() {
     private val pollConfiguration = object : Runnable {
         override fun run() {
             refreshConfiguration(source = ThemeModeDiagnostics.Source.POLL)
+            hideRevealedStatusBar()
             mainHandler.postDelayed(this, CONFIGURATION_POLL_INTERVAL_MILLIS)
         }
     }
@@ -855,6 +856,7 @@ open class CarPlayHostActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        holdLandscape()
         if (CarPlayScreen.forwarded(this)) {
             forwarded = true
             return
@@ -1222,6 +1224,7 @@ open class CarPlayHostActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         skipInsecureLockScreen(::appendLog)
+        holdLandscape()
         if (wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.LOCAL_ONLY_HOTSPOT) turnOffWifiClientOnce(::appendLog)
         WheelKeyService.restoreIfNeeded(this)
         hostAppearanceResumed = true
@@ -1956,6 +1959,7 @@ open class CarPlayHostActivity : ComponentActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         refreshConfiguration(newConfig, ThemeModeDiagnostics.Source.CALLBACK)
+        holdLandscape()
         applyFullscreenMode()
         stageStatusView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
         connectionHelpView?.maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
@@ -3131,6 +3135,22 @@ open class CarPlayHostActivity : ComponentActivity() {
             ).apply { topMargin = dp(26) },
         )
         content = pageFor("display")
+
+        if (CarTabletOwner.isOwner(this)) {
+            content.addView(
+                buildStepSliderSection(
+                    title = getString(R.string.car_tablet_brightness),
+                    values = (0..100 step 5).toList(),
+                    selectedValue = CarTabletOwner.brightnessPercent(this),
+                    label = { if (it == 0) getString(R.string.car_tablet_brightness_auto) else "$it%" },
+                    onValueChanged = { CarTabletOwner.setBrightnessPercent(this, it) },
+                ),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { bottomMargin = dp(24) },
+            )
+        }
 
         val resolutionControl = DisplaySettingsSection.createResolutionSlider(
             context = this,
@@ -6903,6 +6923,17 @@ open class CarPlayHostActivity : ComponentActivity() {
         statusScrollView?.post {
             statusScrollView?.fullScroll(View.FOCUS_DOWN)
         }
+    }
+
+    /**
+     * A swipe from the top can leave an empty status bar over CarPlay (pinned CarPlay has nothing to show in it).
+     * Hide it again on the next poll unless DiPlay itself is showing the bars.
+     */
+    private fun hideRevealedStatusBar() {
+        if (!hideTopBar || temporarySystemBarsVisible || isMultiWindowActive() || harmanFullscreenEnabled) return
+        val insets = ViewCompat.getRootWindowInsets(window.decorView) ?: return
+        if (!insets.isVisible(WindowInsetsCompat.Type.statusBars())) return
+        WindowInsetsControllerCompat(window, window.decorView).hide(WindowInsetsCompat.Type.statusBars())
     }
 
     private fun applyFullscreenMode() {

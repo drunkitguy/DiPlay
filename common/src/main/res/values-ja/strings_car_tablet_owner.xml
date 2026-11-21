@@ -7,4 +7,6 @@
     <string name="device_owner_release_message">デバイスオーナーを解除しますか？DiPlay は Wi-Fi の自動オフと CarPlay の固定を停止します。再設定には adb が必要です。</string>
     <string name="device_owner_release">解除</string>
     <string name="update_installing_silently">アップデートをインストールしています。完了すると DiPlay が再起動します。</string>
+    <string name="car_tablet_brightness">画面の明るさ</string>
+    <string name="car_tablet_brightness_auto">自動</string>
 </resources>
