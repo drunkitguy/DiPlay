@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="pin_carplay_title">連線時固定 CarPlay</string>
-    <string name="pin_carplay_description">無法從最近使用的應用程式切換離開 CarPlay。通知欄仍可開啟。</string>
+    <string name="pin_carplay_title">車載螢幕模式</string>
+    <string name="pin_carplay_description">不顯示鎖定畫面。CarPlay 連線時隱藏狀態列、通知欄、主畫面與最近使用的應用程式。長按電源鍵可開啟電源選單。</string>
     <string name="device_owner_title">裝置擁有者</string>
     <string name="device_owner_description">DiPlay 會自動關閉平板的 Wi-Fi，並可固定 CarPlay。關閉即可解除裝置擁有者。</string>
     <string name="device_owner_release_message">要解除裝置擁有者嗎？DiPlay 將停止自動關閉 Wi-Fi 與固定 CarPlay。重新設定需要 adb。</string>

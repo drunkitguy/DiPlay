@@ -20,8 +20,16 @@ internal object CarTabletOwner {
 
     fun pinEnabled(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_PIN, true)
 
-    fun savePinEnabled(context: Context, enabled: Boolean) =
+    fun savePinEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_PIN, enabled).apply()
+        applyLockScreen(context)
+    }
+
+    /** Car screen mode has no lock screen; turning it off brings the lock screen back. No-op with a PIN set. */
+    fun applyLockScreen(context: Context, disabled: Boolean = pinEnabled(context)) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || !isOwner(context)) return
+        runCatching { context.getSystemService(DevicePolicyManager::class.java)?.setKeyguardDisabled(admin(context), disabled) }
+    }
 
     fun admin(context: Context) = ComponentName(context, CarTabletAdminReceiver::class.java)
 
@@ -31,13 +39,14 @@ internal object CarTabletOwner {
         val dpm = context.getSystemService(DevicePolicyManager::class.java) ?: return
         if (!dpm.isDeviceOwnerApp(context.packageName)) return
         runCatching { dpm.setLockTaskPackages(admin(context), emptyArray()) }
+        applyLockScreen(context, disabled = false)
         dpm.clearDeviceOwnerApp(context.packageName)
     }
 }
 
 /**
- * While CarPlay is connected, pins DiPlay's task so recents can't switch away. The status bar,
- * the notification shade, Home (DiPlay itself) and the power menu keep working. Only as device owner,
+ * While CarPlay is connected, pins DiPlay's task with no status bar, notification shade, Home or
+ * Recents, so nothing of Android shows. Holding power still opens the power menu. Only as device owner,
  * where pinning needs no confirmation.
  */
 internal fun Activity.pinForCarPlay(pin: Boolean, log: (String) -> Unit) {
@@ -48,9 +57,8 @@ internal fun Activity.pinForCarPlay(pin: Boolean, log: (String) -> Unit) {
             val dpm = getSystemService(DevicePolicyManager::class.java)
             val admin = CarTabletOwner.admin(this)
             dpm.setLockTaskPackages(admin, arrayOf(packageName))
-            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
-                DevicePolicyManager.LOCK_TASK_FEATURE_HOME or DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS or
-                DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS)
+            // Power menu kept as the way out: Restart ends the pin.
+            dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS)
             startLockTask()
         }.onSuccess { log("CarPlay pinned while connected") }
             .onFailure { log("CarPlay pin failed failureClass=${it.javaClass.simpleName}") }
