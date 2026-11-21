@@ -2733,7 +2733,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun latestRelease(): UpdateRelease? {
-        return UpdateReleaseLookup.latest(version(), userAgent(), carTablet = CarTabletUpdates.setup(this))
+        val carTablet = CarTabletUpdates.setup(this)
+        if (carTablet != null && CarTabletOwner.isOwner(this)) {
+            CarTabletUpdates.ensureInternet(this, carPlayRunning = CarPlayBackgroundSession.hasSession())
+        }
+        return UpdateReleaseLookup.latest(version(), userAgent(), carTablet = carTablet)
     }
 
     private fun openAvailableUpdate(release: UpdateRelease) {

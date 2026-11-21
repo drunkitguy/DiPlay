@@ -14,6 +14,10 @@ internal object HotspotAddressPolicy {
         else -> null
     }
 
+    // shortcut: the Lenovo car tablet tries IPv6 link-local first so the iPhone needn't wait for a DHCP lease;
+    // a first-TCP timeout saves IPv4 for good. Widen to other makers once a log shows the gain.
+    fun defaultFamily(manufacturer: String): String? = if (manufacturer.equals("lenovo", ignoreCase = true)) FAMILY_IPV6 else null
+
     fun flipFamily(family: String): String = if (family == FAMILY_IPV6) FAMILY_IPV4 else FAMILY_IPV6
 
     fun select(addresses: List<InetAddress>): InetAddress? {

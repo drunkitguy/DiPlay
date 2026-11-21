@@ -1364,7 +1364,7 @@ class CarPlayController(
             val preferredFamily = HotspotAddressPolicy.parseFamily(
                 appContext.getSharedPreferences(WIRELESS_PREFS, Context.MODE_PRIVATE)
                     .getString(HOTSPOT_FAMILY_PREFERENCE_KEY, null),
-            )
+            ) ?: HotspotAddressPolicy.defaultFamily(Build.MANUFACTURER)
             val addressRecovery = HotspotAddressRecovery(
                 sample = { hotspotCandidates(hotspotInfo, fallbackToSnapshot = false) },
                 cancelled = { isStaleWirelessRun(generation) },

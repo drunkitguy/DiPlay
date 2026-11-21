@@ -41,6 +41,9 @@ internal fun Activity.wakeScreenForCarPlay(log: (String) -> Unit) {
 
 @Volatile private var wifiOffAsked = false
 
+/** After an update turned the Wi-Fi client on, the next CarPlay start turns it off again. */
+internal fun allowWifiClientOffAgain() { wifiOffAsked = false }
+
 /**
  * Car tablet: a Wi-Fi client left on, joined to nothing, keeps scanning and pulls the radio off the
  * hotspot's channel, which stalls CarPlay for up to a second. Once per boot DiPlay turns it off:

@@ -123,4 +123,10 @@ class HotspotAddressPolicyTest {
 
         assertNull(HotspotAddressPolicy.alternateFamilyCandidate(listOf(linkLocal), linkLocal))
     }
+
+    @Test
+    fun theLenovoCarTabletTriesIpv6FirstAndOthersKeepTheDefault() {
+        assertEquals(HotspotAddressPolicy.FAMILY_IPV6, HotspotAddressPolicy.defaultFamily("LENOVO"))
+        assertNull(HotspotAddressPolicy.defaultFamily("samsung"))
+    }
 }
