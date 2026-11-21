@@ -96,6 +96,7 @@ internal object CarPlayMediaKeys {
     @Synchronized
     fun detach(expected: CarPlayController?) {
         if (expected == null || controller !== expected) return
+        iphonePlaying = false
         com.shilapi.xcertplay.media.AmbientMusicController.releasePlaybackOwner(expected)
         expected.playbackListener = null
         expected.nowPlayingListener = null
@@ -112,6 +113,7 @@ internal object CarPlayMediaKeys {
 
     /** The iPhone started or stopped playing; may run on any thread. */
     private fun onIphonePlaying(expected: CarPlayController, playing: Boolean) {
+        iphonePlaying = playing
         if (playing) mainHandler.post {
             synchronized(this) {
                 if (controller === expected) regainFocusLocked(onIphonePlaybackResume = true)
@@ -417,6 +419,13 @@ internal object CarPlayMediaKeys {
                 .build(),
         )
     }
+
+    @Volatile private var iphonePlaying = false
+
+    /** Car off with CarPlay kept for a quick stop: pauses the iPhone; true when something was playing. */
+    internal fun pauseForPark(): Boolean = iphonePlaying.also { if (it) send(CarPlayMediaButton.PAUSE, "car off") }
+
+    internal fun resumeAfterPark() = send(CarPlayMediaButton.PLAY, "car on")
 
     private fun send(index: Int, source: String) {
         // While the car's video player is on screen the wheel drives it: a CarPlay play/pause would

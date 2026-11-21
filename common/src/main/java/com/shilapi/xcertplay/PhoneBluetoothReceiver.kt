@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import com.shilapi.xcertplay.orchestration.WirelessHotspotMode
 
 /** Optional DiLink wake-up path for the iPhone the user selected in connection setup. */
 class PhoneBluetoothReceiver : BroadcastReceiver() {
@@ -62,10 +63,16 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
             if (prefs.contains("last_launch_elapsed") && now >= previous && now - previous < 15_000) return
             prefs.edit().putLong("last_launch_elapsed", now).commit()
             PhoneWakeDiagnostics.record(context, "matched")
-            val launch = Intent(context, DiPlayActivity::class.java).apply {
+            // Car tablet: wireless CarPlay on DiPlay's own hotspot needs no setup checks, so open it
+            // directly instead of going through DiPlay's home screen first.
+            val direct = AirPlayPersistence.loadWirelessEnabled(context) &&
+                AirPlayPersistence.loadWirelessHotspotMode(context) == WirelessHotspotMode.LOCAL_ONLY_HOTSPOT
+            val launch = if (direct) {
+                CarPlayScreen.intent(context).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            } else Intent(context, DiPlayActivity::class.java).apply {
                 putExtra(EXTRA_AUTO_CONNECT, launchToken)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        }
+            }
         runCatching { context.startActivity(launch) }
             .onSuccess { PhoneWakeDiagnostics.record(context, "startActivity-returned") }
             .onFailure { error ->

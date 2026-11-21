@@ -6086,6 +6086,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         knownCause: ConnectionFailureCause? = null,
     ) {
         if (!CarPlayBackgroundSession.isOwner(this)) return
+        if (CarParking.endQuickStop(this)) { appendLog("$reason while the car is off: ending CarPlay"); return }
         // Also when a retry is already pending and this loss is dropped: that retry must not skip.
         lossSinceControlRunning = true
         if (menuOpen) recoveryPendingAfterMenu = true

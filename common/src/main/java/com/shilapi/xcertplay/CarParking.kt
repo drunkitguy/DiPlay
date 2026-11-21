@@ -18,14 +18,16 @@ import java.util.Locale
 
 /**
  * Car tablet after the car turns off: when the ignition socket's power goes away (battery in), or the
- * car's or the iPhone's Bluetooth goes away, CarPlay stops, brightness goes to minimum and the screen
- * turns off. Power or Bluetooth coming back restores the screen settings and reopens CarPlay. A new
- * boot also restores them.
+ * car's or the iPhone's Bluetooth goes away, brightness goes to minimum and the screen turns off. A live
+ * CarPlay session is paused and kept for a quick stop, then ends two minutes after the car went off.
+ * Power or Bluetooth coming back restores the screen settings and CarPlay. A new boot also restores them.
  */
 internal object CarParking {
     private const val PREFS = "diplay_parking"
     private const val DEBOUNCE_MILLIS = 10_000L
     private const val PARKED_SCREEN_OFF_MILLIS = "5000"
+    /** With [DEBOUNCE_MILLIS], CarPlay ends two minutes after the car goes off. */
+    private const val QUICK_STOP_MILLIS = 110_000L
     private val CAR_CLASSES = setOf(
         BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO, BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE)
     private val main by lazy { Handler(Looper.getMainLooper()) }
@@ -34,6 +36,16 @@ internal object CarParking {
 
     /** Set by the running CarPlay host so a park can end the session. */
     @Volatile var stopCarPlay: (() -> Unit)? = null
+    private var pausedForPark = false
+    private val endCarPlay = Runnable { pausedForPark = false; stopCarPlay?.invoke() }
+
+    /** The host lost CarPlay while parked: end it now instead of reconnecting with the car off. */
+    fun endQuickStop(context: Context): Boolean {
+        if (!parked(context)) return false
+        main.removeCallbacks(endCarPlay)
+        main.post(endCarPlay)
+        return true
+    }
 
     fun onAcl(context: Context, device: BluetoothDevice, connected: Boolean) {
         val app = context.applicationContext
@@ -104,7 +116,12 @@ internal object CarParking {
             .commit()
         applyScreen(context, mode = "0", brightness = "1", timeout = PARKED_SCREEN_OFF_MILLIS)
         record(context, "parked: $reason")
-        stopCarPlay?.invoke()
+        if (CarPlayBackgroundSession.active) {
+            pausedForPark = CarPlayMediaKeys.pauseForPark()
+            main.postDelayed(endCarPlay, QUICK_STOP_MILLIS)
+        } else {
+            stopCarPlay?.invoke()
+        }
     }
 
     fun unpark(context: Context) {
@@ -114,6 +131,13 @@ internal object CarParking {
             brightness = prefs.getInt("brightness", 128).toString(), timeout = prefs.getInt("timeout", 60_000).toString())
         prefs.edit().putBoolean("parked", false).commit()
         record(context, "unparked")
+        main.removeCallbacks(endCarPlay)
+        if (pausedForPark) { pausedForPark = false; CarPlayMediaKeys.resumeAfterPark() }
+        // CarPlay kept through a quick stop: the screen went off, so bring CarPlay back up and wake it.
+        if (CarPlayBackgroundSession.hasSession()) runCatching {
+            context.startActivity(CarPlayScreen.intent(context).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+        }
     }
 
     fun report(context: Context): String =
