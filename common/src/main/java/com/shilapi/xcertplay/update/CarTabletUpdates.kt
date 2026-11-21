@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.SystemClock
@@ -105,13 +106,14 @@ internal object CarTabletUpdates {
     /**
      * DiPlay keeps the Wi-Fi client off for CarPlay, and the CarPlay hotspot has no internet. Outside CarPlay,
      * device owner turns the client on so a saved network (home Wi-Fi or the iPhone's Personal Hotspot) can carry
-     * the update; the next CarPlay start turns it off again.
+     * the update; the next CarPlay start turns it off again. Returns that network: requests must go over it,
+     * since the default network can still be one with no internet or DNS.
      */
     @Suppress("DEPRECATION") // setWifiEnabled works for device owner on targetSdk 29+.
-    fun ensureInternet(context: Context, carPlayRunning: Boolean, waitMillis: Long = 25_000) {
-        val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return
-        if (InternetNetworkSelector.select(connectivity) != null) return
-        val wifi = context.applicationContext.getSystemService(WifiManager::class.java) ?: return
+    fun ensureInternet(context: Context, carPlayRunning: Boolean, waitMillis: Long = 25_000): Network? {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return null
+        InternetNetworkSelector.select(connectivity)?.let { return it }
+        val wifi = context.applicationContext.getSystemService(WifiManager::class.java) ?: return null
         if (!wifi.isWifiEnabled) {
             if (carPlayRunning) throw IOException("No internet while CarPlay runs. End CarPlay, then check again.")
             if (!runCatching { wifi.setWifiEnabled(true) }.getOrDefault(false)) {
@@ -121,7 +123,7 @@ internal object CarTabletUpdates {
         }
         val end = SystemClock.elapsedRealtime() + waitMillis
         while (SystemClock.elapsedRealtime() < end) {
-            if (InternetNetworkSelector.select(connectivity) != null) return
+            InternetNetworkSelector.select(connectivity)?.let { return it }
             Thread.sleep(500)
         }
         throw IOException("No internet. Turn on your iPhone's Personal Hotspot or park near home Wi-Fi, then check again.")

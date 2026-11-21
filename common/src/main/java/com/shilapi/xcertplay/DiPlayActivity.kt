@@ -2734,12 +2734,18 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }, "diplay-update-check").start()
     }
 
+    // Car tablet: the network ensureInternet found, so update requests don't go to a default network with no DNS.
+    @Volatile private var updateNetwork: android.net.Network? = null
+
+    private fun updateConnection(url: java.net.URL): java.net.URLConnection =
+        updateNetwork?.openConnection(url) ?: url.openConnection()
+
     private fun latestRelease(): UpdateRelease? {
         val carTablet = CarTabletUpdates.setup(this)
-        if (carTablet != null && CarTabletOwner.isOwner(this)) {
+        updateNetwork = if (carTablet != null && CarTabletOwner.isOwner(this)) {
             CarTabletUpdates.ensureInternet(this, carPlayRunning = CarPlayBackgroundSession.hasSession())
-        }
-        return UpdateReleaseLookup.latest(version(), userAgent(), carTablet = carTablet)
+        } else null
+        return UpdateReleaseLookup.latest(version(), userAgent(), openConnection = ::updateConnection, carTablet = carTablet)
     }
 
     private fun openAvailableUpdate(release: UpdateRelease) {
@@ -2773,9 +2779,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 // The cached release can be a day old. Download the newest one.
                 release = latestRelease() ?: throw IOException(getString(R.string.update_up_to_date))
                 val checksumsFile = File(directory, UpdateCatalog.CHECKSUMS_FILE)
-                UpdateClient.download(release.checksumsUrl, checksumsFile, CarTabletUpdates.headers(this, release.checksumsUrl)) { _, _ -> }
+                UpdateClient.download(release.checksumsUrl, checksumsFile, CarTabletUpdates.headers(this, release.checksumsUrl), ::updateConnection) { _, _ -> }
                 val apkFile = File(directory, release.apkName)
-                UpdateClient.download(release.apkUrl, apkFile, CarTabletUpdates.headers(this, release.apkUrl)) { written, total ->
+                UpdateClient.download(release.apkUrl, apkFile, CarTabletUpdates.headers(this, release.apkUrl), ::updateConnection) { written, total ->
                     val percent = total?.takeIf { it > 0 }?.let { (written * 100 / it).toInt() } ?: return@download
                     if (percent != updateProgress) {
                         updateProgress = percent

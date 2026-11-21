@@ -49,10 +49,11 @@ internal object UpdateClient {
         url: String,
         destination: File,
         headers: Map<String, String> = emptyMap(),
+        openConnection: (URL) -> URLConnection = { it.openConnection() },
         onProgress: (Long, Long?) -> Unit,
     ) {
         destination.parentFile?.mkdirs()
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val connection = openConnection(URL(url)) as HttpURLConnection
         try {
             connection.connectTimeout = CONNECT_TIMEOUT_MILLIS
             connection.readTimeout = READ_TIMEOUT_MILLIS
