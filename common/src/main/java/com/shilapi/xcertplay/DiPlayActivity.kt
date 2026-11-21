@@ -1858,6 +1858,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         override fun onStopTrackingTouch(bar: SeekBar) = Unit
                     })
                 }, LinearLayout.LayoutParams(-1, dp(48)))
+                card.addView(button(getString(R.string.car_tablet_bluetooth), false) { showBluetoothDevices() })
                 lateinit var owner: Switch
                 owner = toggle(card, getString(R.string.device_owner_title), getString(R.string.device_owner_description), true) { on ->
                     if (on) return@toggle

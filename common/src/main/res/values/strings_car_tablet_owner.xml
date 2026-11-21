@@ -9,4 +9,11 @@
     <string name="update_installing_silently">Installing the update. DiPlay restarts when it\'s done.</string>
     <string name="car_tablet_brightness">Screen brightness</string>
     <string name="car_tablet_brightness_auto">Auto</string>
+    <string name="car_tablet_bluetooth">Bluetooth devices</string>
+    <string name="car_tablet_bluetooth_off">Turn on Bluetooth first.</string>
+    <string name="car_tablet_bluetooth_connected">Connected</string>
+    <string name="car_tablet_bluetooth_paired">Paired</string>
+    <string name="car_tablet_bluetooth_pairing">Pairing…</string>
+    <string name="car_tablet_bluetooth_tap_to_pair">Tap to pair</string>
+    <string name="car_tablet_bluetooth_done">Done</string>
 </resources>

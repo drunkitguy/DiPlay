@@ -9,4 +9,11 @@
     <string name="update_installing_silently">正在安裝更新。完成後 DiPlay 會重新啟動。</string>
     <string name="car_tablet_brightness">螢幕亮度</string>
     <string name="car_tablet_brightness_auto">自動</string>
+    <string name="car_tablet_bluetooth">藍牙裝置</string>
+    <string name="car_tablet_bluetooth_off">請先開啟藍牙。</string>
+    <string name="car_tablet_bluetooth_connected">已連線</string>
+    <string name="car_tablet_bluetooth_paired">已配對</string>
+    <string name="car_tablet_bluetooth_pairing">配對中…</string>
+    <string name="car_tablet_bluetooth_tap_to_pair">輕觸以配對</string>
+    <string name="car_tablet_bluetooth_done">完成</string>
 </resources>

@@ -9,4 +9,11 @@
     <string name="update_installing_silently">アップデートをインストールしています。完了すると DiPlay が再起動します。</string>
     <string name="car_tablet_brightness">画面の明るさ</string>
     <string name="car_tablet_brightness_auto">自動</string>
+    <string name="car_tablet_bluetooth">Bluetooth デバイス</string>
+    <string name="car_tablet_bluetooth_off">先に Bluetooth をオンにしてください。</string>
+    <string name="car_tablet_bluetooth_connected">接続済み</string>
+    <string name="car_tablet_bluetooth_paired">ペアリング済み</string>
+    <string name="car_tablet_bluetooth_pairing">ペアリング中…</string>
+    <string name="car_tablet_bluetooth_tap_to_pair">タップしてペアリング</string>
+    <string name="car_tablet_bluetooth_done">完了</string>
 </resources>
