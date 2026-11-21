@@ -18,6 +18,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import com.shilapi.xcertplay.host.R
 
 /**
  * Car tablet: pair a Bluetooth device, like the car's stereo, from DiPlay. Android connects a paired
