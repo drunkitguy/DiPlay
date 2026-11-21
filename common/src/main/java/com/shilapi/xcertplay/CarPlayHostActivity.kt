@@ -672,6 +672,10 @@ open class CarPlayHostActivity : ComponentActivity() {
     private var heldTouchX = 0f
     private var heldTouchY = 0f
     private val sendHeldTouch = Runnable { flushHeldTouch() }
+    private var brightnessPullY = Float.NaN
+    private var brightnessPullSwallow = false
+    private var brightnessPanel: View? = null
+    private val hideBrightness = Runnable { hideBrightnessPanel() }
     private var recoveryPendingAfterMenu = false
     private var failurePendingAfterMenu: CarPlayStatus.Failed? = null
     private val shuttingDown = AtomicBoolean(false)
@@ -6584,6 +6588,7 @@ open class CarPlayHostActivity : ComponentActivity() {
 
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
         if (menuOpen) return true
+        if (brightnessPull(view, event)) return true
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -6670,6 +6675,98 @@ open class CarPlayHostActivity : ComponentActivity() {
             )
         }
         return true
+    }
+
+    /**
+     * One finger pulled down from the top-right corner opens a brightness slider over CarPlay. A touch that
+     * starts there is held like [holdTouch] does; a tap or any other move still reaches CarPlay.
+     */
+    private fun brightnessPull(view: View, event: MotionEvent): Boolean {
+        if (brightnessPullSwallow) {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                brightnessPullSwallow = false
+            }
+            return true
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                hideBrightnessPanel()
+                brightnessPullY = Float.NaN
+                val content = contentRect(view.width, view.height)
+                if (!CarTabletOwner.isOwner(this) || event.x < view.width * 0.75f ||
+                    event.y > view.height * 0.15f || !content.contains(event.x, event.y)) return false
+                gestureSequenceActive = false
+                gestureTracking = false
+                touchOutsideContent = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) view.requestUnbufferedDispatch(event)
+                dropHeldTouch()
+                heldTouch = MotionEvent.obtain(event)
+                heldTouchContent = content
+                heldTouchX = event.x
+                heldTouchY = event.y
+                // A tap is sent the moment the finger lifts; only a press held still waits this long.
+                mainHandler.postDelayed(sendHeldTouch, BRIGHTNESS_PULL_WAIT_MILLIS)
+                brightnessPullY = event.y
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (brightnessPullY.isNaN()) return false
+                if (heldTouch == null) {
+                    brightnessPullY = Float.NaN
+                    return false
+                }
+                val down = event.y - brightnessPullY
+                if (down <= Math.abs(event.x - heldTouchX)) return false
+                if (down >= dp(BRIGHTNESS_PULL_DP)) {
+                    brightnessPullY = Float.NaN
+                    dropHeldTouch()
+                    brightnessPullSwallow = true
+                    showBrightnessPanel()
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                brightnessPullY = Float.NaN
+        }
+        return false
+    }
+
+    private fun showBrightnessPanel() {
+        val root = gestureOverlay?.parent as? FrameLayout ?: return
+        hideBrightnessPanel()
+        val panel = buildStepSliderSection(
+            title = getString(R.string.car_tablet_brightness),
+            values = (0..100 step 5).toList(),
+            selectedValue = CarTabletOwner.brightnessPercent(this),
+            label = { if (it == 0) getString(R.string.car_tablet_brightness_auto) else "$it%" },
+            onValueChanged = {
+                CarTabletOwner.setBrightnessPercent(this, it)
+                keepBrightnessPanel()
+            },
+        ).apply {
+            isClickable = true
+            setPadding(dp(24), dp(16), dp(24), dp(16))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(20).toFloat()
+                setColor(MENU_BACKGROUND)
+            }
+            elevation = dp(8).toFloat()
+        }
+        root.addView(panel, FrameLayout.LayoutParams(dp(420), FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.RIGHT).apply { setMargins(0, dp(16), dp(16), 0) })
+        brightnessPanel = panel
+        keepBrightnessPanel()
+    }
+
+    private fun keepBrightnessPanel() {
+        mainHandler.removeCallbacks(hideBrightness)
+        mainHandler.postDelayed(hideBrightness, BRIGHTNESS_PANEL_MILLIS)
+    }
+
+    private fun hideBrightnessPanel() {
+        mainHandler.removeCallbacks(hideBrightness)
+        brightnessPanel?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        brightnessPanel = null
     }
 
     /** Releases every finger on the iPhone, and drops a touch that has not reached it yet. */
@@ -7063,6 +7160,9 @@ open class CarPlayHostActivity : ComponentActivity() {
         const val SETTINGS_SWIPE_DIRECTION_RATIO = 1.15f
         /** A Galaxy Note20 reported the third finger of a swipe 42 ms after the first. */
         const val SETTINGS_SWIPE_HOLD_MILLIS = 80L
+        const val BRIGHTNESS_PULL_DP = 48
+        const val BRIGHTNESS_PULL_WAIT_MILLIS = 300L
+        const val BRIGHTNESS_PANEL_MILLIS = 4_000L
         const val MAX_SETTINGS_MENU_WIDTH_DP = 720
         const val SWIPE_PANEL_MARGIN_DP = 16
         const val SWIPE_PANEL_RADIUS_DP = 28

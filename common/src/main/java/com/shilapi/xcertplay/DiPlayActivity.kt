@@ -1026,7 +1026,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         right.addView(homeButton(getString(R.string.settings), false) { page = "settings"; render() }, matchButton(height = if (compact) 54 else 68))
         if (!compact) right.addView(label(getString(R.string.make_diplay_feel_right_for_your_car), 14, MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(24)) })
         else right.addView(space(12))
-        right.addView(label(getString(R.string.home_public_preview, version()), 12, MUTED).apply { letterSpacing = .08f })
+        right.addView(label(getString(R.string.home_public_preview, shownVersion()), 12, MUTED).apply { letterSpacing = .08f })
         availableUpdate?.let { release ->
             val message = getString(R.string.update_available_home)
             val tint = { alpha: Int -> (WARNING and 0x00FFFFFF) or (alpha shl 24) }
@@ -1838,6 +1838,26 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             if (CarTabletOwner.isOwner(this)) {
                 toggle(card, getString(R.string.pin_carplay_title), getString(R.string.pin_carplay_description),
                     CarTabletOwner.pinEnabled(this)) { CarTabletOwner.savePinEnabled(this, it) }
+                card.addView(label(getString(R.string.car_tablet_brightness), 16, ACCENT, bold = true))
+                fun brightnessText(percent: Int) = if (percent == 0) getString(R.string.car_tablet_brightness_auto) else "$percent%"
+                val brightnessValue = label(brightnessText(CarTabletOwner.brightnessPercent(this)), 14, MUTED)
+                card.addView(brightnessValue)
+                card.addView(SeekBar(this).apply {
+                    max = 20
+                    progress = CarTabletOwner.brightnessPercent(this@DiPlayActivity) / 5
+                    contentDescription = getString(R.string.car_tablet_brightness)
+                    progressTintList = android.content.res.ColorStateList.valueOf(ACCENT)
+                    thumbTintList = android.content.res.ColorStateList.valueOf(ACCENT)
+                    setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(bar: SeekBar, level: Int, fromUser: Boolean) {
+                            if (!fromUser) return
+                            CarTabletOwner.setBrightnessPercent(this@DiPlayActivity, level * 5)
+                            brightnessValue.text = brightnessText(level * 5)
+                        }
+                        override fun onStartTrackingTouch(bar: SeekBar) = Unit
+                        override fun onStopTrackingTouch(bar: SeekBar) = Unit
+                    })
+                }, LinearLayout.LayoutParams(-1, dp(48)))
                 lateinit var owner: Switch
                 owner = toggle(card, getString(R.string.device_owner_title), getString(R.string.device_owner_description), true) { on ->
                     if (on) return@toggle
@@ -2550,7 +2570,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun about(content: LinearLayout) {
         settingsPageTitle(content, getString(R.string.about_diplay), getString(R.string.carplay_at_home_in_your_car))
-        section(content, getString(R.string.about_public_preview_prefix, version())) { card ->
+        section(content, getString(R.string.about_public_preview_prefix, shownVersion())) { card ->
             card.addView(label(getString(R.string.an_independent_carplay_receiver_for_android_head_units_wir), 17, TEXT))
             card.addView(updateRow())
             toggle(card, getString(R.string.settings_background_update_checks),
@@ -2714,7 +2734,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         availableUpdate = release
                         if (release == null) {
                             UpdateAvailability.clear(this)
-                            updateMessage = getString(R.string.update_up_to_date)
+                            updateMessage = "${getString(R.string.update_up_to_date)} · ${shownVersion()}"
                             updateStage = UpdateStage.IDLE
                         } else {
                             UpdateAvailability.save(this, release)
@@ -6043,7 +6063,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     /** The text of a diagnostic report. It reads the session logs, so call it off the main thread. */
     private fun diagnosticReportText(appContext: Context): String = buildString {
-        appendLine("DiPlay ${version()} · private beta diagnostic report")
+        appendLine("DiPlay ${shownVersion()} · private beta diagnostic report")
         appendLine(LastConnectionProblem.report(appContext))
         appendLine("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
         appendLine("Head unit: ${Build.MANUFACTURER} ${Build.MODEL}")
@@ -6272,6 +6292,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         return grid
     }
     private fun version() = packageManager.getPackageInfo(packageName, 0).versionName ?: "0.1.0-beta.1"
+    /** Car-tablet builds share versionName 0.2.22-car; the release number makes it 0.2.22-car27. */
+    private fun shownVersion() = CarTabletUpdates.setup(this)?.build?.let { "${version()}$it" } ?: version()
     private fun languageSettings(content: LinearLayout) {
         filteredSection(content, SettingsSection.LANGUAGE,
             getString(R.string.language_section_title), R.drawable.ic_dp_language) { card ->

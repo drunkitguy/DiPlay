@@ -26,6 +26,8 @@ internal object CarParking {
     private const val PREFS = "diplay_parking"
     private const val DEBOUNCE_MILLIS = 10_000L
     private const val PARKED_SCREEN_OFF_MILLIS = "5000"
+    /** Woken by hand with the car off: long enough to use, short enough not to drain the battery. */
+    private const val WOKEN_WHILE_PARKED_MILLIS = "120000"
     /** With [DEBOUNCE_MILLIS], CarPlay ends two minutes after the car goes off. */
     private const val QUICK_STOP_MILLIS = 110_000L
     private val CAR_CLASSES = setOf(
@@ -65,8 +67,9 @@ internal object CarParking {
         if (car) connectedCars -= address
         main.postDelayed({
             // The car's own link going away means ignition off. The iPhone's counts only once CarPlay is
-            // gone too, because it can drop Bluetooth after the Wi-Fi handoff while CarPlay keeps running.
-            if (if (car) address !in connectedCars else !CarPlayBackgroundSession.active) park(app, "$who Bluetooth left")
+            // gone too, because it can drop Bluetooth after the Wi-Fi handoff while CarPlay keeps running,
+            // and only off power: the iPhone walking away from a running car or a charger is not the car going off.
+            if (if (car) address !in connectedCars else !CarPlayBackgroundSession.active && !plugged(app)) park(app, "$who Bluetooth left")
         }, DEBOUNCE_MILLIS)
     }
 
@@ -77,20 +80,29 @@ internal object CarParking {
         val app = context.applicationContext
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
-                if (intent.action == Intent.ACTION_POWER_CONNECTED) {
-                    record(app, "car power connected")
-                    unpark(app)
-                    PhoneBluetoothReceiver.wake(app)
-                } else {
-                    record(app, "car power disconnected")
-                    // A cranking dip reconnects within the debounce.
-                    main.postDelayed({ if (!plugged(app)) park(app, "car power went off") }, DEBOUNCE_MILLIS)
+                when (intent.action) {
+                    Intent.ACTION_POWER_CONNECTED -> {
+                        record(app, "car power connected")
+                        unpark(app)
+                        PhoneBluetoothReceiver.wake(app)
+                    }
+                    Intent.ACTION_POWER_DISCONNECTED -> {
+                        record(app, "car power disconnected")
+                        // A cranking dip reconnects within the debounce.
+                        main.postDelayed({ if (!plugged(app)) park(app, "car power went off") }, DEBOUNCE_MILLIS)
+                    }
+                    // Parking turned the screen off; someone woke it, so give back normal brightness for a while.
+                    Intent.ACTION_SCREEN_ON -> if (parked(app)) prefs(app).let {
+                        applyScreen(app, mode = it.getInt("mode", 0).toString(),
+                            brightness = it.getInt("brightness", 128).toString(), timeout = WOKEN_WHILE_PARKED_MILLIS)
+                    }
                 }
             }
         }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
+            addAction(Intent.ACTION_SCREEN_ON)
         }
         if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         else app.registerReceiver(receiver, filter)
