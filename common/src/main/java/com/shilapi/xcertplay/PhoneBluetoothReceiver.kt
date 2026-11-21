@@ -13,6 +13,9 @@ import android.util.Log
 /** Optional DiLink wake-up path for the iPhone the user selected in connection setup. */
 class PhoneBluetoothReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == BluetoothDevice.ACTION_ACL_DISCONNECTED || intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
+            aclDevice(context, intent)?.let { CarParking.onAcl(context, it, intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) }
+        }
         if (intent.action != BluetoothDevice.ACTION_ACL_CONNECTED ||
             !DiPlayPreferences.connectOnPhoneBluetooth(context) ||
             CarPlayBackgroundSession.hasSession()) return
@@ -28,6 +31,17 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
         val address = runCatching { device.address }.getOrNull() ?: return
         if (!address.equals(selected, ignoreCase = true)) return
         wake(context)
+    }
+
+    private fun aclDevice(context: Context, intent: Intent): BluetoothDevice? {
+        if (Build.VERSION.SDK_INT >= 31 &&
+            context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return null
+        return if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        }
     }
 
     companion object {

@@ -875,6 +875,15 @@ open class CarPlayHostActivity : ComponentActivity() {
             finish(); return
         }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        CarParking.parked(this) // restores the screen settings when a park is left from before a power cut
+        CarParking.stopCarPlay = {
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                appendLog("Car off: stopping CarPlay")
+                pinForCarPlay(false, ::appendLog)
+                exitApplication()
+            }
+        }
         // Car tablet: it boots on ignition to the lock screen; CarPlay shows over it, the tablet stays locked.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         getSystemService(android.hardware.display.DisplayManager::class.java)
