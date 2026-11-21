@@ -18,7 +18,7 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
         }
         if (intent.action != BluetoothDevice.ACTION_ACL_CONNECTED ||
             !DiPlayPreferences.connectOnPhoneBluetooth(context) ||
-            CarPlayBackgroundSession.hasSession()) return
+            CarPlayBackgroundSession.hasSession() || CarParking.parked(context)) return
         val selected = DiPlayPreferences.phoneAddress(context) ?: return
         if (Build.VERSION.SDK_INT >= 31 &&
             context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return

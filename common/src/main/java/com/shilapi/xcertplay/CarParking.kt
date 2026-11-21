@@ -3,7 +3,11 @@ package com.shilapi.xcertplay
 import android.app.admin.DevicePolicyManager
 import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -13,9 +17,10 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Car tablet on cable power after the car turns off: when the car's or the iPhone's Bluetooth goes
- * away, CarPlay stops, brightness goes to minimum and the screen turns off. The car's or the iPhone's
- * Bluetooth coming back restores the screen settings and reopens CarPlay. A new boot also restores them.
+ * Car tablet after the car turns off: when the ignition socket's power goes away (battery in), or the
+ * car's or the iPhone's Bluetooth goes away, CarPlay stops, brightness goes to minimum and the screen
+ * turns off. Power or Bluetooth coming back restores the screen settings and reopens CarPlay. A new
+ * boot also restores them.
  */
 internal object CarParking {
     private const val PREFS = "diplay_parking"
@@ -25,6 +30,7 @@ internal object CarParking {
         BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO, BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE)
     private val main by lazy { Handler(Looper.getMainLooper()) }
     private val connectedCars = mutableSetOf<String>()
+    private var watchingPower = false
 
     /** Set by the running CarPlay host so a park can end the session. */
     @Volatile var stopCarPlay: (() -> Unit)? = null
@@ -39,7 +45,8 @@ internal object CarParking {
         record(app, "$who Bluetooth ${if (connected) "connected" else "disconnected"}")
         if (connected) {
             if (car) connectedCars += address
-            unpark(app)
+            // With the battery in, the iPhone can rejoin while the car is off; only power or the car's link unparks then.
+            if (car || plugged(app)) unpark(app)
             if (car) PhoneBluetoothReceiver.wake(app)
             return
         }
@@ -47,8 +54,34 @@ internal object CarParking {
         main.postDelayed({
             // The car's own link going away means ignition off. The iPhone's counts only once CarPlay is
             // gone too, because it can drop Bluetooth after the Wi-Fi handoff while CarPlay keeps running.
-            if (if (car) address !in connectedCars else !CarPlayBackgroundSession.active) park(app, who)
+            if (if (car) address !in connectedCars else !CarPlayBackgroundSession.active) park(app, "$who Bluetooth left")
         }, DEBOUNCE_MILLIS)
+    }
+
+    /** Battery in: the ignition socket going dead means the car is off, and power coming back means it started. */
+    fun watchPower(context: Context) {
+        if (watchingPower) return
+        watchingPower = true
+        val app = context.applicationContext
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                if (intent.action == Intent.ACTION_POWER_CONNECTED) {
+                    record(app, "car power connected")
+                    unpark(app)
+                    PhoneBluetoothReceiver.wake(app)
+                } else {
+                    record(app, "car power disconnected")
+                    // A cranking dip reconnects within the debounce.
+                    main.postDelayed({ if (!plugged(app)) park(app, "car power went off") }, DEBOUNCE_MILLIS)
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
+        }
+        if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        else app.registerReceiver(receiver, filter)
     }
 
     /** True while parked in this boot; a parked state left from before a power cut is restored here. */
@@ -70,7 +103,7 @@ internal object CarParking {
             .putInt("timeout", Settings.System.getInt(resolver, Settings.System.SCREEN_OFF_TIMEOUT, 60_000))
             .commit()
         applyScreen(context, mode = "0", brightness = "1", timeout = PARKED_SCREEN_OFF_MILLIS)
-        record(context, "parked after $reason Bluetooth left")
+        record(context, "parked: $reason")
         stopCarPlay?.invoke()
     }
 
@@ -84,7 +117,7 @@ internal object CarParking {
     }
 
     fun report(context: Context): String =
-        "Car off detection: ${prefs(context).getString("last", "no Bluetooth event recorded")}"
+        "Car off detection: ${prefs(context).getString("last", "nothing recorded")}"
 
     /** Only the device owner may change these system settings without the user's Modify system settings grant. */
     private fun applyScreen(context: Context, mode: String, brightness: String, timeout: String) {
@@ -102,6 +135,10 @@ internal object CarParking {
         val at = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
         prefs(context).edit().putString("last", "$at $event").apply()
     }
+
+    /** Unknown counts as plugged, so a missing battery broadcast never parks a running CarPlay. */
+    private fun plugged(context: Context) = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        ?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
 
     private fun bootCount(context: Context) =
         Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, 0)

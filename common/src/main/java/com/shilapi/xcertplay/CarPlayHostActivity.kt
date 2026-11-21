@@ -876,6 +876,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         CarParking.parked(this) // restores the screen settings when a park is left from before a power cut
+        CarParking.watchPower(this)
         CarParking.stopCarPlay = {
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
