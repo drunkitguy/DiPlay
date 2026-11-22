@@ -9,14 +9,9 @@ class LocalOnlyHotspotRadioInfoTest {
     @Test fun waitsForTheDriverChannelSwitchToSettleBeforeAdvertising() {
         val requested = LocalOnlyHotspotRadioInfo.Radio(mac, 5200)
         val actual = LocalOnlyHotspotRadioInfo.Radio(mac, 5745)
-        assertNull(LocalOnlyHotspotRadioInfo.settledRadio(listOf(requested), mac, 500, 2_000))
-        assertNull(LocalOnlyHotspotRadioInfo.settledRadio(listOf(actual), mac, 1_999, 2_000))
-        assertEquals(actual, LocalOnlyHotspotRadioInfo.settledRadio(listOf(actual), mac, 2_000, 2_000))
-    }
-
-    @Test fun aStableMakerTakesTheFirstReading() {
-        val ap = LocalOnlyHotspotRadioInfo.Radio(mac, 5180)
-        assertEquals(ap, LocalOnlyHotspotRadioInfo.settledRadio(listOf(ap), mac, 0, 0))
+        assertNull(LocalOnlyHotspotRadioInfo.settledRadio(listOf(requested), mac, 500))
+        assertNull(LocalOnlyHotspotRadioInfo.settledRadio(listOf(actual), mac, 1_999))
+        assertEquals(actual, LocalOnlyHotspotRadioInfo.settledRadio(listOf(actual), mac, 2_000))
     }
 
     @Test fun usesObservedApChannelRatherThanAutomaticConfigurationOrOtherRadio() {

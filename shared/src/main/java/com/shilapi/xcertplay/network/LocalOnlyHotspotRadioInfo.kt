@@ -105,13 +105,8 @@ internal class LocalOnlyHotspotRadioInfo(private val wifi: WifiManager) : Closea
     companion object {
         // DiLink briefly reports the requested channel, then the driver moves it ~1s later.
         // Do not send those transient channel details to the phone during its Wi-Fi handshake.
-        // shortcut: the Lenovo car tablet kept its channel in every log, so it takes the first reading
-        // (about 2 s sooner); other makers keep the check. Widen the list if another one proves stable.
-        private fun settleMillis(): Long = if (Build.MANUFACTURER.equals("lenovo", ignoreCase = true)) 0L else 2_000L
-
-        fun settledRadio(radios: List<Radio>, bssid: String?, unchangedMillis: Long,
-                         settleMillis: Long = settleMillis()): Radio? =
-            if (unchangedMillis >= settleMillis) matchingRadio(radios, bssid) else null
+        fun settledRadio(radios: List<Radio>, bssid: String?, unchangedMillis: Long): Radio? =
+            if (unchangedMillis >= 2_000) matchingRadio(radios, bssid) else null
 
         fun matchingRadio(radios: List<Radio>, bssid: String?): Radio? = radios.singleOrNull {
             bssid != null && it.bssid.equals(bssid, ignoreCase = true) &&

@@ -1361,10 +1361,14 @@ class CarPlayController(
             wirelessConnectionProof.begin(generation) {
                 if (!isStaleWirelessRun(generation)) startedHotspot?.onCarPlayConfirmed()
             }
+            val familyPrefs = appContext.getSharedPreferences(WIRELESS_PREFS, Context.MODE_PRIVATE)
+            // Car tablet: drop a family saved while car24-28 tried IPv6 first; IPv4 is what worked in the car.
+            if (!familyPrefs.getBoolean("car29_family_reset", false)) {
+                familyPrefs.edit().remove(HOTSPOT_FAMILY_PREFERENCE_KEY).putBoolean("car29_family_reset", true).commit()
+            }
             val preferredFamily = HotspotAddressPolicy.parseFamily(
-                appContext.getSharedPreferences(WIRELESS_PREFS, Context.MODE_PRIVATE)
-                    .getString(HOTSPOT_FAMILY_PREFERENCE_KEY, null),
-            ) ?: HotspotAddressPolicy.defaultFamily(Build.MANUFACTURER)
+                familyPrefs.getString(HOTSPOT_FAMILY_PREFERENCE_KEY, null),
+            )
             val addressRecovery = HotspotAddressRecovery(
                 sample = { hotspotCandidates(hotspotInfo, fallbackToSnapshot = false) },
                 cancelled = { isStaleWirelessRun(generation) },
