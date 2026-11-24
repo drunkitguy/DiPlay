@@ -2555,19 +2555,6 @@ class CarPlayController(
             if (state == false) debugLog("car hotspot: Android reports it off; connecting anyway, as the driver chose")
             pastOffReport = state == false
         }
-        // Car tablet: the hotspot from the last session stays up through car off, so the iPhone stays on it.
-        if (hotspotMode == WirelessHotspotMode.LOCAL_ONLY_HOTSPOT) keptHotspot?.let { (kept, info) ->
-            if (kept.isLive()) {
-                synchronized(wirelessResourceLock) {
-                    if (isStaleWirelessRun(generation)) throw java.io.InterruptedIOException("Hotspot startup cancelled")
-                    hotspot = kept
-                }
-                debugLog("generation=$generation LocalOnlyHotspot kept up since the last session ssid=${info.ssid} channel=${info.channel}")
-                return info
-            }
-            keptHotspot = null
-            closeBestEffort("stopped kept hotspot") { kept.close() }
-        }
         val manager: WirelessHotspotManager = when (hotspotMode) {
             WirelessHotspotMode.WIFI_P2P -> WifiP2pGroupManager(appContext, ::debugLog,
                 preferredChannel = config.wifiP2pPreferredChannel)
@@ -2610,7 +2597,7 @@ class CarPlayController(
             HOTSPOT_START_TIMEOUT_MILLIS
         }
         return try {
-            manager.start(timeoutMillis).also { if (manager is LocalOnlyHotspotManager) keptHotspot = manager to it }
+            manager.start(timeoutMillis)
         } catch (failure: Exception) {
             if (hotspot === manager) hotspot = null
             closeBestEffort(hotspotMode.name) { manager.close() }
@@ -2883,7 +2870,7 @@ class CarPlayController(
 
             val activeHotspot = hotspot
             hotspot = null
-            if (activeHotspot != null && activeHotspot !== keptHotspot?.first) closeBestEffort("wireless hotspot") { activeHotspot.close() }
+            if (activeHotspot != null) closeBestEffort("wireless hotspot") { activeHotspot.close() }
             wirelessRuntimeIdentification = null
             wirelessAirPlayEndpoint = null
             wirelessPublishedAddress = null
@@ -3333,8 +3320,6 @@ class CarPlayController(
         private const val START_SESSION_PROGRESS = "iap2 tx=0x4301"
         private const val EXECUTOR_CLOSE_TIMEOUT_MILLIS = 2_000L
         private const val ADAPTER_ADDRESS_PLACEHOLDER = "02:00:00:00:00:00"
-        /** Car tablet: one local hotspot for the life of the process, reused by every session. */
-        @Volatile private var keptHotspot: Pair<LocalOnlyHotspotManager, WirelessHotspotInfo>? = null
         private val BLUETOOTH_ADDRESS = Regex("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
     }
 }

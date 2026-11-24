@@ -217,8 +217,6 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
                     SoftApConfiguration.Builder::class.java.getMethod("setBand", Int::class.javaPrimitiveType)
                         .invoke(builder, SoftApConfiguration.BAND_5GHZ)
                 }
-                // Stays up with no iPhone on it while the car is off; Android's default idle shutdown is 10 minutes.
-                builder.setAutoShutdownEnabled(false)
                 val method = if (Build.VERSION.SDK_INT >= 36) "startLocalOnlyHotspotWithConfiguration" else "startLocalOnlyHotspot"
                 WifiManager::class.java.getMethod(method, SoftApConfiguration::class.java, Executor::class.java,
                     WifiManager.LocalOnlyHotspotCallback::class.java).invoke(wifiManager, builder.build(), executor, callback)
@@ -302,9 +300,6 @@ class LocalOnlyHotspotManager(context: Context, private val onDiagnostic: (Strin
             }
         }
     }
-
-    /** True while the reservation is up and Android has not stopped it. */
-    fun isLive(): Boolean = synchronized(stateLock) { reservation != null && !stopped && !closed }
 
     override fun close() {
         val activeReservation: WifiManager.LocalOnlyHotspotReservation?

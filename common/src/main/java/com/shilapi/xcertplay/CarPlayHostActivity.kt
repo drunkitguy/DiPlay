@@ -890,12 +890,9 @@ open class CarPlayHostActivity : ComponentActivity() {
         CarParking.stopCarPlay = {
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
-                appendLog("Car off: stopping CarPlay; the hotspot stays up")
+                appendLog("Car off: stopping CarPlay")
                 pinForCarPlay(false, ::appendLog)
-                // Not exitApplication: killing the process would take the kept hotspot down with it.
-                restoreSettingsBaseline()
-                finishAndRemoveTask()
-                shutdown(terminateProcess = false, reason = "car off")
+                exitApplication()
             }
         }
         // Car tablet: it boots on ignition to the lock screen; CarPlay shows over it, the tablet stays locked.
