@@ -11,6 +11,8 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -84,6 +86,7 @@ internal object CarParking {
                     Intent.ACTION_POWER_CONNECTED -> {
                         record(app, "car power connected")
                         unpark(app)
+                        connectOnNextScreen(app)
                         PhoneBluetoothReceiver.wake(app)
                     }
                     Intent.ACTION_POWER_DISCONNECTED -> {
@@ -150,6 +153,29 @@ internal object CarParking {
             context.startActivity(CarPlayScreen.intent(context).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         }
+    }
+
+    /**
+     * Car on: light the screen and leave a note for DiPlay's home screen. Android can block opening CarPlay
+     * from this receiver while the screen is off; the home screen then connects by itself once it shows.
+     */
+    @Suppress("DEPRECATION") // ACQUIRE_CAUSES_WAKEUP has no replacement for a screen that is off.
+    private fun connectOnNextScreen(context: Context) {
+        prefs(context).edit().putLong("connect_wanted_at", SystemClock.elapsedRealtime()).apply()
+        runCatching {
+            context.getSystemService(PowerManager::class.java)
+                ?.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "DiPlay:car-on")
+                ?.acquire(5_000)
+        }
+    }
+
+    /** True once if the car came on in the last 30 s; DiPlay's home screen then connects without a tap. */
+    fun takeConnectWanted(context: Context): Boolean {
+        val prefs = prefs(context)
+        val at = prefs.getLong("connect_wanted_at", 0)
+        if (at == 0L) return false
+        prefs.edit().remove("connect_wanted_at").apply()
+        return SystemClock.elapsedRealtime() - at in 0..30_000
     }
 
     fun report(context: Context): String =

@@ -541,6 +541,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             return
         }
         handler.removeCallbacks(tick); handler.post(tick)
+        // Car tablet: the car just came on and the launch from the power receiver may have been blocked.
+        if (CarParking.takeConnectWanted(this) && setupError == null && !CarPlayBackgroundSession.hasSession() &&
+            DiPlayPreferences.phoneAddress(this) != null && !CarParking.parked(this)) {
+            handler.post { connect(true) }
+        }
         // Back with the hotspot access now allowed: the start-up attempt that lacked it runs again.
         if (hotspotStartupResult == CarHotspotTethering.Result.PERMISSION_REQUIRED && CarHotspotTethering.permitted(this)) {
             hotspotStartupResult = null
