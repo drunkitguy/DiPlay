@@ -11,7 +11,8 @@ package com.shilapi.xcertplay.media
 object MediaAudioBuffer {
     const val DEFAULT_MILLIS = 300
     const val MOST_STABLE_MILLIS = 1000
-    val wirelessPresets = listOf(DEFAULT_MILLIS, 500, MOST_STABLE_MILLIS)
+    // Car tablet: 150 ms for audio through the tablet's own Bluetooth, where the extra delay matters.
+    val wirelessPresets = listOf(150, DEFAULT_MILLIS, 500, MOST_STABLE_MILLIS)
     val wiredPresets = listOf(50, 100, 150, 200) + (DEFAULT_MILLIS..MOST_STABLE_MILLIS step 100)
     /** Every delay a session can use; [plan] accepts any of them. */
     val presets = (wiredPresets + wirelessPresets).distinct().sorted()

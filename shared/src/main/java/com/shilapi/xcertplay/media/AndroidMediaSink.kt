@@ -278,6 +278,20 @@ class AndroidMediaSink(
         navigationAttenuationDb = NavigationAudioGain.clamp(db)
         audioRenderers.values.forEach { it.setNavigationAttenuationDb(navigationAttenuationDb) }
     }
+    @Volatile private var musicAttenuationDb = 0
+    @Volatile private var assistantAttenuationDb = 0
+
+    /** Car tablet: music and Siri levels, applied like the navigation one without reconnecting. */
+    fun setStreamAttenuationDb(music: Int, assistant: Int) {
+        musicAttenuationDb = NavigationAudioGain.clamp(music)
+        assistantAttenuationDb = NavigationAudioGain.clamp(assistant)
+        audioRenderers.values.forEach { it.setStreamAttenuationDb(musicAttenuationDb, assistantAttenuationDb) }
+    }
+
+    /** Car tablet: with the car on the tablet's Bluetooth, calls play there too, not on the tablet's speaker. */
+    private fun carOnTabletBluetooth(): Boolean = runCatching {
+        audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)?.any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
+    }.getOrNull() == true
     private val microphoneUplinks = ConcurrentHashMap<AudioStreamId, MicrophoneUplink>()
     private val audioModeLock = Any()
     private var communicationModeStream: AudioStreamId? = null
@@ -559,7 +573,7 @@ class AndroidMediaSink(
         // This callback runs on the downlink thread; microphone failures must not stop playback.
         try {
             val speakerphoneCall = config.audioType == "telephony" &&
-                appContext != null && BydBluetoothSuspend.isSuspendedByUs(appContext)
+                appContext != null && (BydBluetoothSuspend.isSuspendedByUs(appContext) || carOnTabletBluetooth())
             if (config.audioType == "telephony" && !speakerphoneCall) enterCommunicationMode(id)
             val uplink = microphoneUplinks.computeIfAbsent(id) {
                 MicrophoneUplink(config, onAudioDiagnostic,
@@ -749,15 +763,17 @@ class AndroidMediaSink(
             onAudioDiagnostic,
             ambientSinkToken,
             speakerphoneCall = format.audioType == "telephony" &&
-                appContext != null && BydBluetoothSuspend.isSuspendedByUs(appContext),
+                appContext != null && (BydBluetoothSuspend.isSuspendedByUs(appContext) || carOnTabletBluetooth()),
             echoReference = echoReference,
             voiceFilter = callVoiceFilter && format.audioType == TELEPHONY_AUDIO_TYPE,
         ).also {
             it.setNavigationAttenuationDb(navigationAttenuationDb)
+            it.setStreamAttenuationDb(musicAttenuationDb, assistantAttenuationDb)
             if (format.audioType == TELEPHONY_AUDIO_TYPE) it.onRoutedToEarpiece = { moveCallToLoudspeaker(id) }
             audioRenderers[id] = it
             // Cover a Settings change made while this renderer was being prepared.
             it.setNavigationAttenuationDb(navigationAttenuationDb)
+            it.setStreamAttenuationDb(musicAttenuationDb, assistantAttenuationDb)
         }
     }
 
@@ -1806,6 +1822,8 @@ private class AudioRenderer(
     private var codec: MediaCodec? = null
     private var track: AudioTrack? = null
     @Volatile private var navigationAttenuationDb = 0
+    @Volatile private var musicAttenuationDb = 0
+    @Volatile private var assistantAttenuationDb = 0
     private var appliedNavigationAttenuationDb: Int? = null
     private var pcm = ByteArray(64 * 1024)
     private var playbackStarted = false
@@ -2123,6 +2141,11 @@ private class AudioRenderer(
         navigationAttenuationDb = NavigationAudioGain.clamp(db)
     }
 
+    fun setStreamAttenuationDb(music: Int, assistant: Int) {
+        musicAttenuationDb = NavigationAudioGain.clamp(music)
+        assistantAttenuationDb = NavigationAudioGain.clamp(assistant)
+    }
+
     /**
      * Worker-thread only. The guidance is scaled in [attenuateNavigation] as it is written, not with
      * AudioTrack.setVolume: on a BYD DiLink 3.0 the track accepted every setVolume and the guidance on
@@ -2140,8 +2163,14 @@ private class AudioRenderer(
 
     /** Lowers navigation guidance in the PCM itself; other channels and 0 dB pass through untouched. */
     private fun attenuateNavigation(data: ByteArray, offset: Int, length: Int) {
-        if (mappedChannel != AudioChannel.NAVIGATION) return
-        NavigationAudioGain.scalePcm16(data, offset, length, navigationAttenuationDb)
+        val db = when (mappedChannel) {
+            AudioChannel.NAVIGATION -> navigationAttenuationDb
+            // A call moved onto the media channel keeps its own level.
+            AudioChannel.MEDIA -> if (format.audioType == "telephony") 0 else musicAttenuationDb
+            AudioChannel.ASSISTANT -> assistantAttenuationDb
+            else -> 0
+        }
+        NavigationAudioGain.scalePcm16(data, offset, length, db)
     }
 
     private fun audioAttributesFor(

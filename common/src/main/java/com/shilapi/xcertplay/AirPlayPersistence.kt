@@ -51,6 +51,8 @@ object AirPlayPersistence {
     private const val KEY_MEDIA_AUDIO_CHANNEL = "media_audio_channel"
     private const val KEY_NAVIGATION_AUDIO_CHANNEL = "navigation_audio_channel"
     private const val KEY_NAVIGATION_AUDIO_ATTENUATION = "navigation_audio_attenuation_db"
+    const val KEY_MUSIC_AUDIO_ATTENUATION = "music_audio_attenuation_db"
+    const val KEY_SIRI_AUDIO_ATTENUATION = "siri_audio_attenuation_db"
     private const val KEY_NAVIGATION_STREAM_TYPE = "navigation_stream_type"
     private const val KEY_WIRELESS_ENABLED = "wireless_enabled"
     private const val KEY_WIRELESS_HOTSPOT_MODE = "wireless_hotspot_mode"
@@ -704,8 +706,25 @@ object AirPlayPersistence {
     )
 
     /** Music buffer for the session's transport. Wireless and wired USB have separate settings. */
+    /** Car tablet: music or Siri level, [key] being one of the two keys above. */
+    fun loadStreamAttenuationDb(context: Context, key: String): Int =
+        com.shilapi.xcertplay.media.NavigationAudioGain.clamp(
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(key, 0))
+
+    fun saveStreamAttenuationDb(context: Context, key: String, db: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(key, com.shilapi.xcertplay.media.NavigationAudioGain.clamp(db)).apply()
+    }
+
     fun loadMediaBufferMillis(context: Context, wireless: Boolean): Int {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Car tablet (car32): once, move the old 300 ms wireless default to 150 ms.
+        if (!prefs.getBoolean("car32_music_buffer", false)) {
+            prefs.edit().putBoolean("car32_music_buffer", true).apply {
+                if (prefs.getInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS) ==
+                    com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS) putInt(KEY_MEDIA_BUFFER_MS, 150)
+            }.commit()
+        }
         val shared = prefs.getInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS)
         return if (wireless) {
             com.shilapi.xcertplay.media.MediaAudioBuffer.sanitizeWireless(shared)

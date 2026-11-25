@@ -2176,6 +2176,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             card.addView(label(getString(R.string.settings_navigation_attenuation_description), 14, MUTED).apply {
                 setPadding(0, dp(SETTINGS_BLOCK_GAP_DP), 0, 0)
             })
+            streamGainSlider(card, getString(R.string.settings_music_attenuation), AirPlayPersistence.KEY_MUSIC_AUDIO_ATTENUATION)
+            streamGainSlider(card, getString(R.string.settings_siri_attenuation), AirPlayPersistence.KEY_SIRI_AUDIO_ATTENUATION)
             musicBufferChoice(card, wireless = true)
             musicBufferChoice(card, wireless = false)
             toggle(card, getString(R.string.settings_call_speakerphone), getString(R.string.settings_call_speakerphone_description),
@@ -6583,6 +6585,24 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     /** Music buffer for one transport. A change reconnects only a running session of that transport. */
+    /** Car tablet: a music or Siri level slider, like the navigation one; applies without reconnecting. */
+    private fun streamGainSlider(card: LinearLayout, title: String, key: String) {
+        val gain = com.shilapi.xcertplay.media.NavigationAudioGain
+        val row = overlaySliderRow(title, (gain.MIN_DB..gain.MAX_DB).toList(),
+            AirPlayPersistence.loadStreamAttenuationDb(this, key),
+        ) { db -> getString(R.string.settings_navigation_attenuation_value, db) }
+        row.slider.contentDescription = "$title: " +
+            getString(R.string.settings_navigation_attenuation_value, AirPlayPersistence.loadStreamAttenuationDb(this, key))
+        row.onSave = { db ->
+            AirPlayPersistence.saveStreamAttenuationDb(this, key, db)
+            CarPlayBackgroundSession.snapshot()?.sink?.setStreamAttenuationDb(
+                AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_MUSIC_AUDIO_ATTENUATION),
+                AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_SIRI_AUDIO_ATTENUATION))
+            row.slider.contentDescription = "$title: " + getString(R.string.settings_navigation_attenuation_value, db)
+        }
+        card.addView(row)
+    }
+
     private fun musicBufferChoice(card: LinearLayout, wireless: Boolean) {
         val buffer = com.shilapi.xcertplay.media.MediaAudioBuffer
         val presets = if (wireless) buffer.wirelessPresets else buffer.wiredPresets

@@ -5387,7 +5387,11 @@ open class CarPlayHostActivity : ComponentActivity() {
             vendorLowLatencyDecoder = AirPlayPersistence.loadLowLatencyDecoder(this),
             mtkDecoderTuningEnabled = AirPlayPersistence.loadMtkDecoderTuning(this),
             navigationPromptAudioFocus = AirPlayPersistence.loadNavigationPromptAudioFocus(this),
-        )
+        ).also {
+            it.setStreamAttenuationDb(
+                AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_MUSIC_AUDIO_ATTENUATION),
+                AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_SIRI_AUDIO_ATTENUATION))
+        }
     }
 
     private fun createMediaEngine(sink: AndroidMediaSink): CarPlayMediaEngine =
