@@ -34,8 +34,15 @@ internal object CarTabletOwner {
 
     fun admin(context: Context) = ComponentName(context, CarTabletAdminReceiver::class.java)
 
+    private const val KEY_APP_AUTO_BRIGHTNESS = "app_auto_brightness"
+
+    /** Car tablet (car33): Auto is DiPlay's own light-sensor brightness, not the tablet's adaptive brightness. */
+    fun appAutoBrightness(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_APP_AUTO_BRIGHTNESS, true)
+
     /** Screen brightness in percent, 0 meaning automatic. Parking saves and restores whatever is set here. */
     fun brightnessPercent(context: Context): Int {
+        if (appAutoBrightness(context)) return 0
         val resolver = context.contentResolver
         if (Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, 0) == 1) return 0
         val level = Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS, 128)
@@ -43,15 +50,13 @@ internal object CarTabletOwner {
     }
 
     fun setBrightnessPercent(context: Context, percent: Int) {
-        if (!isOwner(context)) return
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_APP_AUTO_BRIGHTNESS, percent <= 0).apply()
+        if (percent <= 0 || !isOwner(context)) return
         val dpm = context.getSystemService(DevicePolicyManager::class.java) ?: return
         runCatching {
-            if (percent <= 0) {
-                dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS_MODE, "1")
-            } else {
-                dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS_MODE, "0")
-                dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS, (percent * 255 / 100).coerceIn(1, 255).toString())
-            }
+            dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS_MODE, "0")
+            dpm.setSystemSetting(admin(context), Settings.System.SCREEN_BRIGHTNESS, (percent * 255 / 100).coerceIn(1, 255).toString())
         }
     }
 
@@ -87,4 +92,10 @@ internal fun Activity.pinForCarPlay(pin: Boolean, log: (String) -> Unit) {
     } else if (!pin && pinned) {
         runCatching { stopLockTask() }.onSuccess { log("CarPlay unpinned") }
     }
+}
+
+/** Light-sensor lux to window brightness 0.03..1: about 13% at 10 lux (night), 35% at 100, 65% at 1000, full in sun. */
+internal fun appBrightnessForLux(lux: Float): Float {
+    val x = (kotlin.math.log10(lux.coerceAtLeast(0f) + 1f) / 4f).coerceIn(0f, 1f)
+    return (x * kotlin.math.sqrt(x)).coerceAtLeast(0.03f)
 }

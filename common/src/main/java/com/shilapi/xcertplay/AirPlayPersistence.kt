@@ -673,9 +673,18 @@ object AirPlayPersistence {
             .putString(KEY_APP_APPEARANCE, appearance.key).apply()
     }
 
-    fun loadCarPlayNightMode(context: Context): CarPlayNightMode = CarPlayNightMode.fromKey(
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CARPLAY_NIGHT_MODE, null),
-    )
+    fun loadCarPlayNightMode(context: Context): CarPlayNightMode {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Car tablet (car33): once, day and night follow DiPlay's light sensor instead of the tablet's theme.
+        if (!prefs.getBoolean("car33_ambient_night", false)) {
+            prefs.edit().putBoolean("car33_ambient_night", true).apply {
+                if (CarPlayNightMode.fromKey(prefs.getString(KEY_CARPLAY_NIGHT_MODE, null)) == CarPlayNightMode.SYSTEM) {
+                    putString(KEY_CARPLAY_NIGHT_MODE, CarPlayNightMode.AMBIENT.key)
+                }
+            }.commit()
+        }
+        return CarPlayNightMode.fromKey(prefs.getString(KEY_CARPLAY_NIGHT_MODE, null))
+    }
 
     fun saveCarPlayNightMode(context: Context, mode: CarPlayNightMode) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -718,13 +727,6 @@ object AirPlayPersistence {
 
     fun loadMediaBufferMillis(context: Context, wireless: Boolean): Int {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        // Car tablet (car32): once, move the old 300 ms wireless default to 150 ms.
-        if (!prefs.getBoolean("car32_music_buffer", false)) {
-            prefs.edit().putBoolean("car32_music_buffer", true).apply {
-                if (prefs.getInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS) ==
-                    com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS) putInt(KEY_MEDIA_BUFFER_MS, 150)
-            }.commit()
-        }
         val shared = prefs.getInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS)
         return if (wireless) {
             com.shilapi.xcertplay.media.MediaAudioBuffer.sanitizeWireless(shared)

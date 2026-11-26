@@ -628,6 +628,33 @@ open class CarPlayHostActivity : ComponentActivity() {
             },
         )
     }
+    private val brightnessLight by lazy { AndroidAmbientLight(this) }
+    private var smoothedBrightness = -1f
+
+    /** Car tablet (car33): with Auto picked, DiPlay sets this window's brightness from the light sensor. */
+    private fun applyAppBrightness(lux: Float? = null) {
+        val attributes = window.attributes
+        // Parked: the parking dim (system brightness) shows through.
+        if (!CarTabletOwner.appAutoBrightness(this) || CarParking.parked(this)) {
+            smoothedBrightness = -1f
+            if (attributes.screenBrightness == android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) return
+            attributes.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        } else {
+            if (lux == null || !lux.isFinite()) return
+            val target = appBrightnessForLux(lux)
+            smoothedBrightness = if (smoothedBrightness < 0f) target else smoothedBrightness * 0.7f + target * 0.3f
+            if (kotlin.math.abs(attributes.screenBrightness - smoothedBrightness) < 0.02f) return
+            attributes.screenBrightness = smoothedBrightness
+        }
+        window.attributes = attributes
+    }
+
+    private fun startAppBrightness() {
+        applyAppBrightness()
+        if (CarTabletOwner.appAutoBrightness(this)) brightnessLight.start { applyAppBrightness(it) }
+        else brightnessLight.stop()
+    }
+
     private val themeDiagnostics = ThemeModeDiagnostics()
     private var lastConfiguration: Configuration? = null
     private var activeAirPlaySession: AirPlaySession? = null
@@ -1248,6 +1275,7 @@ open class CarPlayHostActivity : ComponentActivity() {
                 nightSchedule)
         }
         nightModeController.resume(systemNight)
+        startAppBrightness()
         AppAppearanceRuntime.publishHost(this, darkMode)
         refreshAppAppearance()
         if (!menuOpen) {
@@ -1882,6 +1910,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         updateCallPopupGuard()
         AppAppearanceRuntime.clearHost(this)
         nightModeController.pause()
+        brightnessLight.stop()
         super.onPause()
     }
 
@@ -2002,6 +2031,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         updateCallPopupGuard()
         AppAppearanceRuntime.clearHost(this)
         nightModeController.pause()
+        brightnessLight.stop()
         pictureBinding?.close()
         pictureBinding = null
         removeVideoSurfaceProbe()
@@ -3147,7 +3177,7 @@ open class CarPlayHostActivity : ComponentActivity() {
                     values = (0..100 step 5).toList(),
                     selectedValue = CarTabletOwner.brightnessPercent(this),
                     label = { if (it == 0) getString(R.string.car_tablet_brightness_auto) else "$it%" },
-                    onValueChanged = { CarTabletOwner.setBrightnessPercent(this, it) },
+                    onValueChanged = { CarTabletOwner.setBrightnessPercent(this, it); startAppBrightness() },
                 ),
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -6745,6 +6775,7 @@ open class CarPlayHostActivity : ComponentActivity() {
             label = { if (it == 0) getString(R.string.car_tablet_brightness_auto) else "$it%" },
             onValueChanged = {
                 CarTabletOwner.setBrightnessPercent(this, it)
+                startAppBrightness()
                 keepBrightnessPanel()
             },
         ).apply {
