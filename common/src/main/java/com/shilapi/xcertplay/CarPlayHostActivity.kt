@@ -1252,14 +1252,8 @@ open class CarPlayHostActivity : ComponentActivity() {
         if (AirPlayPersistence.loadFpsCounter(this)) fpsCounter?.start() else fpsCounter?.stop()
     }
 
-    override fun onResume() {
-        super.onResume()
-        skipInsecureLockScreen(::appendLog)
-        holdLandscape()
-        if (wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.LOCAL_ONLY_HOTSPOT) turnOffWifiClientOnce(::appendLog)
-        WheelKeyService.restoreIfNeeded(this)
-        hostAppearanceResumed = true
-        updateCallPopupGuard()
+    /** Reconfigures day and night when a saved setting changed; returns Android's own night state. */
+    private fun applyNightSettings(): Boolean {
         val savedNightMode = AirPlayPersistence.loadCarPlayNightMode(this)
         val savedThreshold = AirPlayPersistence.loadAmbientLightThreshold(this)
         val savedDelay = AirPlayPersistence.loadAmbientDelaySeconds(this)
@@ -1274,6 +1268,18 @@ open class CarPlayHostActivity : ComponentActivity() {
             nightModeController.configure(carPlayNightMode, systemNight, ambientLightThreshold, ambientDelaySeconds,
                 nightSchedule)
         }
+        return systemNight
+    }
+
+    override fun onResume() {
+        super.onResume()
+        skipInsecureLockScreen(::appendLog)
+        holdLandscape()
+        if (wirelessEnabled && wirelessHotspotMode == WirelessHotspotMode.LOCAL_ONLY_HOTSPOT) turnOffWifiClientOnce(::appendLog)
+        WheelKeyService.restoreIfNeeded(this)
+        hostAppearanceResumed = true
+        updateCallPopupGuard()
+        val systemNight = applyNightSettings()
         nightModeController.resume(systemNight)
         startAppBrightness()
         AppAppearanceRuntime.publishHost(this, darkMode)
@@ -6765,32 +6771,127 @@ open class CarPlayHostActivity : ComponentActivity() {
         return false
     }
 
+    /**
+     * Car tablet (car33): the pull-down holds brightness, an ambient light switch and the music, navigation
+     * and Siri levels, drawn as frosted glass: a translucent tint, a light rim and thick pill sliders.
+     */
     private fun showBrightnessPanel() {
         val root = gestureOverlay?.parent as? FrameLayout ?: return
         hideBrightnessPanel()
-        val panel = buildStepSliderSection(
-            title = getString(R.string.car_tablet_brightness),
-            values = (0..100 step 5).toList(),
-            selectedValue = CarTabletOwner.brightnessPercent(this),
-            label = { if (it == 0) getString(R.string.car_tablet_brightness_auto) else "$it%" },
-            onValueChanged = {
-                CarTabletOwner.setBrightnessPercent(this, it)
+        val gain = com.shilapi.xcertplay.media.NavigationAudioGain
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isClickable = true
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+            background = LayerDrawable(arrayOf(
+                GradientDrawable().apply {
+                    cornerRadius = dp(32).toFloat()
+                    setColor(GLASS_TINT)
+                    setStroke(dp(1), GLASS_RIM)
+                },
+                GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(GLASS_SHINE, Color.TRANSPARENT)).apply {
+                    cornerRadius = dp(32).toFloat()
+                },
+            ))
+            elevation = dp(12).toFloat()
+        }
+        lateinit var brightness: SeekBar
+        lateinit var ambient: Switch
+        brightness = glassSlider(panel, getString(R.string.car_tablet_brightness), (5..100 step 5).toList(),
+            CarTabletOwner.brightnessPercent(this).takeIf { it > 0 }
+                ?: ((window.attributes.screenBrightness.takeIf { it >= 0f } ?: 0.5f) * 100).toInt() / 5 * 5,
+            { "$it%" }) {
+            if (ambient.isChecked) ambient.isChecked = false
+            CarTabletOwner.setBrightnessPercent(this, it)
+            startAppBrightness()
+        }
+        ambient = Switch(this).apply {
+            text = getString(R.string.car_tablet_ambient_light)
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            isChecked = CarTabletOwner.appAutoBrightness(this@CarPlayHostActivity)
+            thumbTintList = ColorStateList.valueOf(Color.WHITE)
+            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(GLASS_GREEN, GLASS_TRACK))
+            setOnCheckedChangeListener { _, on ->
+                // On: brightness and day or night follow the light sensor. Off: the slider's level, Android's theme.
+                CarTabletOwner.setBrightnessPercent(this@CarPlayHostActivity, if (on) 0 else (brightness.progress + 1) * 5)
+                AirPlayPersistence.saveCarPlayNightMode(this@CarPlayHostActivity,
+                    if (on) CarPlayNightMode.AMBIENT else CarPlayNightMode.SYSTEM)
+                applyNightSettings()
                 startAppBrightness()
                 keepBrightnessPanel()
-            },
-        ).apply {
-            isClickable = true
-            setPadding(dp(24), dp(16), dp(24), dp(16))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(20).toFloat()
-                setColor(MENU_BACKGROUND)
             }
-            elevation = dp(8).toFloat()
+        }
+        panel.addView(ambient, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(12) })
+        fun streams() = sink?.setStreamAttenuationDb(
+            AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_MUSIC_AUDIO_ATTENUATION),
+            AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_SIRI_AUDIO_ATTENUATION))
+        val levels = (gain.MIN_DB..gain.MAX_DB).toList()
+        val dbLabel = { db: Int -> getString(R.string.settings_navigation_attenuation_value, db) }
+        glassSlider(panel, getString(R.string.settings_music_attenuation), levels,
+            AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_MUSIC_AUDIO_ATTENUATION), dbLabel) {
+            AirPlayPersistence.saveStreamAttenuationDb(this, AirPlayPersistence.KEY_MUSIC_AUDIO_ATTENUATION, it)
+            streams()
+        }
+        glassSlider(panel, getString(R.string.car_tablet_navigation_volume), levels,
+            AirPlayPersistence.loadNavigationAudioAttenuationDb(this), dbLabel) {
+            AirPlayPersistence.saveNavigationAudioAttenuationDb(this, it)
+            sink?.setNavigationAttenuationDb(it)
+        }
+        glassSlider(panel, getString(R.string.settings_siri_attenuation), levels,
+            AirPlayPersistence.loadStreamAttenuationDb(this, AirPlayPersistence.KEY_SIRI_AUDIO_ATTENUATION), dbLabel) {
+            AirPlayPersistence.saveStreamAttenuationDb(this, AirPlayPersistence.KEY_SIRI_AUDIO_ATTENUATION, it)
+            streams()
         }
         root.addView(panel, FrameLayout.LayoutParams(dp(420), FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.TOP or Gravity.RIGHT).apply { setMargins(0, dp(16), dp(16), 0) })
         brightnessPanel = panel
         keepBrightnessPanel()
+    }
+
+    /** A title row and a thick pill slider filled white from the left, like iOS Control Center. */
+    private fun glassSlider(
+        parent: LinearLayout, title: String, values: List<Int>, selected: Int, label: (Int) -> String,
+        onChange: (Int) -> Unit,
+    ): SeekBar {
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        header.addView(menuText(title, 15f, GLASS_TEXT_DIM), LinearLayout.LayoutParams(0, -2, 1f))
+        val index = values.indexOf(selected).takeIf { it >= 0 } ?: values.indices.minByOrNull {
+            Math.abs(values[it] - selected) } ?: 0
+        val value = menuText(label(values[index]), 15f, Color.WHITE, bold = true)
+        header.addView(value)
+        parent.addView(header, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(4), 0, dp(4), dp(6)) })
+        val radius = dp(22).toFloat()
+        val bar = SeekBar(this).apply {
+            max = values.size - 1
+            progress = index
+            splitTrack = false
+            thumb = null
+            setPadding(0, 0, 0, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { minHeight = dp(44); maxHeight = dp(44) }
+            progressDrawable = LayerDrawable(arrayOf(
+                GradientDrawable().apply { cornerRadius = radius; setColor(GLASS_TRACK) },
+                android.graphics.drawable.ClipDrawable(
+                    GradientDrawable().apply { cornerRadius = radius; setColor(GLASS_FILL) },
+                    Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL),
+            )).apply {
+                setId(0, android.R.id.background)
+                setId(1, android.R.id.progress)
+            }
+            contentDescription = title
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                    val v = values.getOrNull(progress) ?: return
+                    value.text = label(v)
+                    if (fromUser) { onChange(v); keepBrightnessPanel() }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar) = keepBrightnessPanel()
+                override fun onStopTrackingTouch(bar: SeekBar) = keepBrightnessPanel()
+            })
+        }
+        parent.addView(bar, LinearLayout.LayoutParams(-1, dp(44)).apply { bottomMargin = dp(14) })
+        return bar
     }
 
     private fun keepBrightnessPanel() {
@@ -7197,7 +7298,15 @@ open class CarPlayHostActivity : ComponentActivity() {
         const val SETTINGS_SWIPE_HOLD_MILLIS = 80L
         const val BRIGHTNESS_PULL_DP = 48
         const val BRIGHTNESS_PULL_WAIT_MILLIS = 300L
-        const val BRIGHTNESS_PANEL_MILLIS = 4_000L
+        const val BRIGHTNESS_PANEL_MILLIS = 6_000L
+        // Pull-down glass: dark translucent tint, light rim and top sheen, iOS green switch.
+        private const val GLASS_TINT = 0xA61C1C1E.toInt()
+        private const val GLASS_RIM = 0x59FFFFFF
+        private const val GLASS_SHINE = 0x2EFFFFFF
+        private const val GLASS_TRACK = 0x33FFFFFF
+        private const val GLASS_FILL = 0xF2FFFFFF.toInt()
+        private const val GLASS_TEXT_DIM = 0xCCFFFFFF.toInt()
+        private const val GLASS_GREEN = 0xFF34C759.toInt()
         const val MAX_SETTINGS_MENU_WIDTH_DP = 720
         const val SWIPE_PANEL_MARGIN_DP = 16
         const val SWIPE_PANEL_RADIUS_DP = 28
