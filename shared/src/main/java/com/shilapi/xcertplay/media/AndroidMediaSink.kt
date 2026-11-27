@@ -2589,6 +2589,13 @@ private class AudioRenderer(
             // or discarding PCM, then use the configured start threshold again when music resumes.
             track.pause()
             playbackStarted = false
+            // Car tablet (car35): adaptive music refills to a larger level after running dry.
+            if (mappedChannel == AudioChannel.MEDIA && MediaAudioBuffer.sanitize(mediaBufferMillis) == MediaAudioBuffer.ADAPTIVE) {
+                val grown = AdaptiveMediaBuffer.grow()
+                startThresholdBytes = MediaAudioBuffer.startBytesFor((bytesPerSecond.toLong() * grown / 1000).toInt(),
+                    track.bufferSizeInFrames * frameBytes, PREBUFFER_WRITE_CHUNK_BYTES)
+                report("Audio: adaptive music buffer now ${grown}ms")
+            }
             // Pausing retains queued PCM. Count it toward the restart threshold so a
             // blocking write cannot fill the paused track before we call play().
             prebufferBytes = bufferProgress.queuedBytes(track.playbackHeadPosition)

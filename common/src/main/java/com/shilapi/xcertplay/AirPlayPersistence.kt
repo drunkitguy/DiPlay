@@ -727,9 +727,19 @@ object AirPlayPersistence {
 
     fun loadMediaBufferMillis(context: Context, wireless: Boolean): Int {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Car tablet (car35): once, the 300 ms default (and car32's 150 ms) becomes adaptive.
+        if (!prefs.getBoolean("car35_adaptive_music", false)) {
+            prefs.edit().putBoolean("car35_adaptive_music", true).apply {
+                if (prefs.getInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS) in
+                    listOf(150, com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS)) {
+                    putInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.ADAPTIVE)
+                }
+            }.commit()
+        }
         val shared = prefs.getInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.DEFAULT_MILLIS)
         return if (wireless) {
-            com.shilapi.xcertplay.media.MediaAudioBuffer.sanitizeWireless(shared)
+            com.shilapi.xcertplay.media.MediaAudioBuffer.sanitizeWireless(
+                prefs.getInt(KEY_MEDIA_BUFFER_MS, com.shilapi.xcertplay.media.MediaAudioBuffer.ADAPTIVE))
         } else {
             // Until wired has its own value, keep the delay saved when one setting covered both transports.
             com.shilapi.xcertplay.media.MediaAudioBuffer.sanitizeWired(prefs.getInt(KEY_WIRED_MEDIA_BUFFER_MS, shared))

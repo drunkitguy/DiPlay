@@ -41,9 +41,9 @@ class MediaAudioBufferTest {
 
     @Test
     fun `wireless keeps the classic presets`() {
-        assertEquals(listOf(300, 500, 1000), MediaAudioBuffer.wirelessPresets)
-        assertEquals(MediaAudioBuffer.DEFAULT_MILLIS, MediaAudioBuffer.sanitizeWireless(50))
-        assertEquals(MediaAudioBuffer.DEFAULT_MILLIS, MediaAudioBuffer.sanitizeWireless(400))
+        assertEquals(listOf(0, 300, 500, 1000), MediaAudioBuffer.wirelessPresets)
+        assertEquals(MediaAudioBuffer.ADAPTIVE, MediaAudioBuffer.sanitizeWireless(50))
+        assertEquals(MediaAudioBuffer.ADAPTIVE, MediaAudioBuffer.sanitizeWireless(400))
         assertEquals(50, MediaAudioBuffer.sanitizeWired(50))
     }
 
@@ -76,5 +76,26 @@ class MediaAudioBufferTest {
         assertEquals(98_000, MediaAudioBuffer.startBytesFor(192_000, 100_000, 2_048 - 48))
         assertEquals(57_600, MediaAudioBuffer.startBytesFor(57_600, 134_400, 2_048))
         assertEquals(57_600, MediaAudioBuffer.startBytesFor(57_600, 0, 2_048))
+    }
+
+    @Test
+    fun `adaptive music grows on each rebuffer and eases back once steady`() {
+        val adaptive = AdaptiveMediaBuffer
+        adaptive.reset()
+        val minute = 60_000_000_000L
+        assertEquals(150, adaptive.current(minute))
+        // 48 kHz stereo: starts on 150 ms, with room for 600 ms plus headroom.
+        val plan = MediaAudioBuffer.plan(true, 48_000, 2, 7_680, MediaAudioBuffer.ADAPTIVE)
+        assertEquals(28_800, plan.startBytes)
+        assertEquals(153_600, plan.trackBufferBytes)
+        assertEquals(300, adaptive.grow(minute))
+        assertEquals(450, adaptive.grow(minute))
+        assertEquals(600, adaptive.grow(minute))
+        assertEquals(600, adaptive.grow(minute))
+        assertEquals(600, adaptive.current(2 * minute))
+        assertEquals(550, adaptive.current(3 * minute))
+        assertEquals(450, adaptive.current(7 * minute))
+        assertEquals(150, adaptive.current(60 * minute))
+        adaptive.reset()
     }
 }

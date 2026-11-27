@@ -11,8 +11,10 @@ package com.shilapi.xcertplay.media
 object MediaAudioBuffer {
     const val DEFAULT_MILLIS = 300
     const val MOST_STABLE_MILLIS = 1000
-    // Car tablet: 150 ms (car32) dropped out on Wi-Fi gaps once the tablet's own Bluetooth shared the radio.
-    val wirelessPresets = listOf(DEFAULT_MILLIS, 500, MOST_STABLE_MILLIS)
+    /** Car tablet (car35): the start level follows [AdaptiveMediaBuffer] instead of a fixed delay. */
+    const val ADAPTIVE = 0
+    // Car tablet: a fixed 150 ms (car32) dropped out when the iPhone was busy; adaptive starts there and grows.
+    val wirelessPresets = listOf(ADAPTIVE, DEFAULT_MILLIS, 500, MOST_STABLE_MILLIS)
     val wiredPresets = listOf(50, 100, 150, 200) + (DEFAULT_MILLIS..MOST_STABLE_MILLIS step 100)
     /** Every delay a session can use; [plan] accepts any of them. */
     val presets = (wiredPresets + wirelessPresets).distinct().sorted()
@@ -22,7 +24,7 @@ object MediaAudioBuffer {
     private const val MIN_START_BUFFER_BYTES = 4 * 1024
 
     fun sanitize(millis: Int): Int = millis.takeIf { it in presets } ?: DEFAULT_MILLIS
-    fun sanitizeWireless(millis: Int): Int = millis.takeIf { it in wirelessPresets } ?: DEFAULT_MILLIS
+    fun sanitizeWireless(millis: Int): Int = millis.takeIf { it in wirelessPresets } ?: ADAPTIVE
     fun sanitizeWired(millis: Int): Int = millis.takeIf { it in wiredPresets } ?: DEFAULT_MILLIS
 
     data class Plan(val trackBufferBytes: Int, val startBytes: Int)
@@ -35,8 +37,12 @@ object MediaAudioBuffer {
         )
         if (!isMedia) return lowLatency
         val bytesPerSecond = sampleRate.toLong() * channels.coerceIn(1, 2) * 2
-        val start = (bytesPerSecond * sanitize(mediaMillis) / 1000).toInt()
-        val capacity = (bytesPerSecond * (sanitize(mediaMillis) + HEADROOM_MILLIS) / 1000).toInt()
+        val millis = sanitize(mediaMillis)
+        val startMillis = if (millis == ADAPTIVE) AdaptiveMediaBuffer.current() else millis
+        // Adaptive: room for the largest level, so the start level can grow without a new track.
+        val roomMillis = if (millis == ADAPTIVE) AdaptiveMediaBuffer.MAX_MILLIS else millis
+        val start = (bytesPerSecond * startMillis / 1000).toInt()
+        val capacity = (bytesPerSecond * (roomMillis + HEADROOM_MILLIS) / 1000).toInt()
         return Plan(
             trackBufferBytes = maxOf(capacity, lowLatency.trackBufferBytes),
             startBytes = maxOf(start, lowLatency.startBytes),
@@ -50,5 +56,48 @@ object MediaAudioBuffer {
     fun startBytesFor(plannedStartBytes: Int, actualCapacityBytes: Int, writeChunkBytes: Int): Int {
         if (actualCapacityBytes <= 0) return plannedStartBytes
         return minOf(plannedStartBytes, actualCapacityBytes - writeChunkBytes).coerceAtLeast(writeChunkBytes)
+    }
+}
+
+/**
+ * Car tablet (car35): music starts on 150 ms. Each time the stream runs dry (a rebuffer, as when the iPhone is
+ * busy with other apps), the level grows 150 ms, up to 600 ms. After two minutes with no rebuffer it eases back
+ * 50 ms, and so on down to 150 ms. A grown level takes effect at once; a smaller one when music next starts,
+ * since playing queued audio faster or dropping it to shrink would be heard.
+ */
+object AdaptiveMediaBuffer {
+    const val MIN_MILLIS = 150
+    const val MAX_MILLIS = 600
+    const val GROW_MILLIS = 150
+    const val EASE_MILLIS = 50
+    const val STEADY_NANOS = 120_000_000_000L
+
+    private var millis = MIN_MILLIS
+    private var changedNanos = 0L
+
+    @Synchronized
+    fun current(nowNanos: Long = System.nanoTime()): Int {
+        if (millis > MIN_MILLIS && changedNanos != 0L) {
+            val steps = (nowNanos - changedNanos) / STEADY_NANOS
+            if (steps > 0) {
+                millis = (millis - (steps * EASE_MILLIS).toInt()).coerceAtLeast(MIN_MILLIS)
+                changedNanos += steps * STEADY_NANOS
+            }
+        }
+        return millis
+    }
+
+    /** The stream ran dry: the new start level. */
+    @Synchronized
+    fun grow(nowNanos: Long = System.nanoTime()): Int {
+        millis = (current(nowNanos) + GROW_MILLIS).coerceAtMost(MAX_MILLIS)
+        changedNanos = nowNanos
+        return millis
+    }
+
+    @Synchronized
+    internal fun reset() {
+        millis = MIN_MILLIS
+        changedNanos = 0L
     }
 }
