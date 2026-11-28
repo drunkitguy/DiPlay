@@ -44,6 +44,7 @@ internal fun Activity.showBluetoothDevices() {
     val devices = linkedMapOf<String, BluetoothDevice>()
     runCatching { bluetooth.bondedDevices }.getOrNull()?.forEach { devices[it.address] = it }
     var audio: BluetoothA2dp? = null
+    var closed = false
     val rows = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1)
     fun refresh() {
         val connected = runCatching { audio?.connectedDevices }.getOrNull().orEmpty().map { it.address }.toSet()
@@ -59,7 +60,11 @@ internal fun Activity.showBluetoothDevices() {
         })
     }
     val listener = object : BluetoothProfile.ServiceListener {
-        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) { audio = proxy as BluetoothA2dp; refresh() }
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+            // Closed before Android answered: give the proxy straight back instead of leaking it.
+            if (closed) { runCatching { bluetooth.closeProfileProxy(BluetoothProfile.A2DP, proxy) }; return }
+            audio = proxy as BluetoothA2dp; refresh()
+        }
         override fun onServiceDisconnected(profile: Int) { audio = null }
     }
     bluetooth.getProfileProxy(this, listener, BluetoothProfile.A2DP)
@@ -89,6 +94,7 @@ internal fun Activity.showBluetoothDevices() {
         .setAdapter(rows, null)
         .setNegativeButton(R.string.car_tablet_bluetooth_done, null)
         .setOnDismissListener {
+            closed = true
             runCatching { unregisterReceiver(receiver) }
             runCatching { bluetooth.cancelDiscovery() }
             audio?.let { bluetooth.closeProfileProxy(BluetoothProfile.A2DP, it) }

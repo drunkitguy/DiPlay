@@ -438,6 +438,15 @@ open class CarPlayHostActivity : ComponentActivity() {
     private val revealConnectionDetails = Runnable {
         connectionDetails?.apply { alpha = 0f; visibility = View.VISIBLE; animate().alpha(1f).setDuration(400).start() }
     }
+    /** Handed to CarParking while this screen runs; cleared in onDestroy so a static never holds a dead screen. */
+    private val stopForPark: () -> Unit = {
+        runOnUiThread {
+            if (isDestroyed) return@runOnUiThread
+            appendLog("Car off: stopping CarPlay")
+            pinForCarPlay(false, ::appendLog)
+            exitApplication()
+        }
+    }
     private var statusScrollView: ScrollView? = null
     private var stageStatusView: TextView? = null
     private var resolutionValueView: TextView? = null
@@ -914,14 +923,7 @@ open class CarPlayHostActivity : ComponentActivity() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         CarParking.parked(this) // restores the screen settings when a park is left from before a power cut
         CarParking.watchPower(this)
-        CarParking.stopCarPlay = {
-            runOnUiThread {
-                if (isDestroyed) return@runOnUiThread
-                appendLog("Car off: stopping CarPlay")
-                pinForCarPlay(false, ::appendLog)
-                exitApplication()
-            }
-        }
+        CarParking.stopCarPlay = stopForPark
         // Car tablet: it boots on ignition to the lock screen; CarPlay shows over it, the tablet stays locked.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) { setShowWhenLocked(true); setTurnScreenOn(true) }
         getSystemService(android.hardware.display.DisplayManager::class.java)
@@ -2026,6 +2028,9 @@ open class CarPlayHostActivity : ComponentActivity() {
             return
         }
         CarPlayScreen.destroyed(this)
+        if (CarParking.stopCarPlay === stopForPark) CarParking.stopCarPlay = null
+        mainHandler.removeCallbacks(revealConnectionDetails)
+        hideBrightnessPanel()
         runCatching { unregisterReceiver(bluetoothOnReceiver) }
         mainHandler.removeCallbacks(hideTemporarySystemBars)
         dropHeldTouch()

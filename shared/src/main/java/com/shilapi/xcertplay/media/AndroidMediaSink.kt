@@ -1872,6 +1872,8 @@ private class AudioRenderer(
     private var routingListener: AudioRouting.OnRoutingChangedListener? = null
     private var lastPcmWriteNs = 0L
     private var rebufferCount = 0
+    /** When adaptive music last ran dry; 0 once sound came back. */
+    private var adaptiveDryNs = 0L
     private var rebufferPauseReportCount = 0
     private var rebufferRecoverReportCount = 0
     private var queueFullReportCount = 0
@@ -2490,6 +2492,10 @@ private class AudioRenderer(
             lastPcmWriteNs = System.nanoTime()
             if (playbackStarted) reportNavigationPlayback(track)
             if (playbackStarted) trimClock(track)
+            if (adaptiveDryNs != 0L) {
+                if (lastPcmWriteNs - adaptiveDryNs < ADAPTIVE_STALL_NS) growAdaptiveStart(track)
+                adaptiveDryNs = 0L
+            }
             if (!playbackStarted) {
                 prebufferBytes += count
                 if (prebufferBytes >= startThresholdBytes) {
@@ -2580,6 +2586,14 @@ private class AudioRenderer(
         return frameNs
     }
 
+    /** The stream ran dry and sound came back: refill to a larger level before playing again. */
+    private fun growAdaptiveStart(track: AudioTrack) {
+        val grown = AdaptiveMediaBuffer.grow()
+        startThresholdBytes = MediaAudioBuffer.startBytesFor((bytesPerSecond.toLong() * grown / 1000).toInt(),
+            track.bufferSizeInFrames * frameBytes, PREBUFFER_WRITE_CHUNK_BYTES)
+        report("Audio: adaptive music buffer now ${grown}ms")
+    }
+
     private fun maintainPlaybackBuffer() {
         val track = track ?: return
         if (bufferProgress.shouldRebuffer(mappedChannel == AudioChannel.MEDIA, playbackStarted,
@@ -2589,12 +2603,9 @@ private class AudioRenderer(
             // or discarding PCM, then use the configured start threshold again when music resumes.
             track.pause()
             playbackStarted = false
-            // Car tablet (car35): adaptive music refills to a larger level after running dry.
+            // Car tablet: adaptive music grows only if sound comes back soon (a stall), not on a pause or a track's end.
             if (mappedChannel == AudioChannel.MEDIA && MediaAudioBuffer.sanitize(mediaBufferMillis) == MediaAudioBuffer.ADAPTIVE) {
-                val grown = AdaptiveMediaBuffer.grow()
-                startThresholdBytes = MediaAudioBuffer.startBytesFor((bytesPerSecond.toLong() * grown / 1000).toInt(),
-                    track.bufferSizeInFrames * frameBytes, PREBUFFER_WRITE_CHUNK_BYTES)
-                report("Audio: adaptive music buffer now ${grown}ms")
+                adaptiveDryNs = System.nanoTime()
             }
             // Pausing retains queued PCM. Count it toward the restart threshold so a
             // blocking write cannot fill the paused track before we call play().
@@ -2752,6 +2763,8 @@ private class AudioRenderer(
         const val AUDIO_INPUT_WAIT_NS = 100_000_000L
         const val AUDIO_POLL_MILLIS = 10L
         const val BUFFER_TAIL_WAIT_NS = 500_000_000L
+        /** Sound back within this of running dry was a stall; later, a pause or the next track. */
+        const val ADAPTIVE_STALL_NS = 3_000_000_000L
         // Holds a burst after a Wi-Fi gap (~4 s of AAC) instead of dropping it.
         const val MAX_QUEUED_PACKETS = 192
         const val PREBUFFER_WRITE_CHUNK_BYTES = 2 * 1024
